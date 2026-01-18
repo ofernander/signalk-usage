@@ -1,7 +1,7 @@
 {
     "name": "signalk-usage",
     "version": "0.1.0",
-    "description": "Keep track of tank & electrical usage",
+    "description": "Track electrical and tank usage",
     "main": "plugin/index.js",
     "keywords": [
       "signalk-node-server-plugin",
