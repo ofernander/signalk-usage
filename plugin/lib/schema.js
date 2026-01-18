@@ -36,49 +36,44 @@ module.exports = {
     tankage: {
       type: 'array',
       title: 'Tankage',
-      description: 'Track tank levels (fuel, water, waste, etc.)',
       default: [],
       items: {
         type: 'object',
+        title: 'Tank',
         required: ['path', 'periods'],
         properties: {
           path: {
             type: 'string',
-            title: 'SignalK Path',
-            description: 'Full path to tank level (e.g., tanks.freshWater.0.remaining)'
+            title: 'Path',
+            description: 'SignalK path (e.g., tanks.freshWater.0.remaining)'
           },
           name: {
             type: 'string',
-            title: 'Display Name (optional)',
-            description: 'Human-readable name. Will be used in usage path (e.g., "fresh-water" becomes usage.fresh-water.*). Defaults to full SignalK path if not specified.'
-          },
-          capacity: {
-            type: 'number',
-            title: 'Capacity (optional)',
-            description: 'Total capacity in the specified units'
+            title: 'Name',
+            description: 'Display name (optional, defaults to path)'
           },
           periods: {
             type: 'array',
             title: 'Time Periods',
-            description: 'Time periods to track for this specific tank. Each period has a range and aggregation window.',
+            format: 'table',
             default: [
               { range: '1h', aggregation: '1m' },
               { range: '24h', aggregation: '3m' },
-              { range: '7d', aggregation: '5h' }
+              { range: '7d', aggregation: '5m' },
+              { range: '30d', aggregation: '10m' }
             ],
             items: {
               type: 'object',
+              title: 'Period',
               required: ['range', 'aggregation'],
               properties: {
                 range: {
                   type: 'string',
-                  title: 'Time Range',
-                  description: 'How far back to look. Examples: 1h, 24h, 7d, 30d, 365d'
+                  title: 'Range'
                 },
                 aggregation: {
                   type: 'string',
-                  title: 'Aggregation Window',
-                  description: 'How to group data points. Smaller = more detail. Examples: 1m, 15m, 1h, 6h, 1d'
+                  title: 'Aggregation'
                 }
               }
             }
@@ -94,50 +89,51 @@ module.exports = {
     power: {
       type: 'array',
       title: 'Electrical Power',
-      description: 'Track power sources and loads (batteries, solar, shore, etc.)',
       default: [],
       items: {
         type: 'object',
+        title: 'Power Source',
         required: ['path', 'periods'],
         properties: {
           path: {
             type: 'string',
-            title: 'SignalK Path',
-            description: 'Full path to power measurement (e.g., electrical.batteries.512.power)'
+            title: 'Path',
+            description: 'SignalK path (e.g., electrical.batteries.512.power)'
           },
           name: {
             type: 'string',
-            title: 'Display Name (optional)',
-            description: 'Human-readable name. Will be used in usage path (e.g., "shore-power" becomes usage.shore-power.*). Defaults to full SignalK path if not specified.'
+            title: 'Name',
+            description: 'Display name (optional, defaults to path)'
           },
           directionality: {
             type: 'string',
-            title: 'Energy Flow Direction',
-            enum: ['producer', 'consumer', 'bidirectional-normal', 'bidirectional-reversed'],
-            description: 'How to interpret power sign: producer (solar/alternator - only generates), consumer (shore/loads - only consumes), bidirectional-normal (positive=generation, negative=consumption), bidirectional-reversed (positive=consumption, negative=generation, e.g. batteries). Leave blank for auto-detection.'
+            title: 'Direction',
+            enum: ['', 'producer', 'consumer', 'bidirectional-normal', 'bidirectional-reversed'],
+            description: 'Energy flow direction (blank = auto-detect)',
+            default: ''
           },
           periods: {
             type: 'array',
             title: 'Time Periods',
-            description: 'Time periods to track for this specific power source. Each period has a range and aggregation window.',
+            format: 'table',
             default: [
               { range: '1h', aggregation: '1m' },
               { range: '24h', aggregation: '3m' },
-              { range: '7d', aggregation: '5h' }
+              { range: '7d', aggregation: '5m' },
+              { range: '30d', aggregation: '10m' }
             ],
             items: {
               type: 'object',
+              title: 'Period',
               required: ['range', 'aggregation'],
               properties: {
                 range: {
                   type: 'string',
-                  title: 'Time Range',
-                  description: 'How far back to look. Examples: 1h, 24h, 7d, 30d, 365d'
+                  title: 'Range'
                 },
                 aggregation: {
                   type: 'string',
-                  title: 'Aggregation Window',
-                  description: 'How to group data points. Smaller = more detail. Examples: 30s, 1m, 15m, 1h, 6h, 1d'
+                  title: 'Aggregation'
                 }
               }
             }
@@ -150,42 +146,6 @@ module.exports = {
         }
       }
     },
-    groups: {
-      type: 'array',
-      title: 'Usage Groups',
-      description: 'Combine multiple items into totals (e.g., total fuel from multiple tanks)',
-      default: [],
-      items: {
-        type: 'object',
-        required: ['id', 'name', 'type', 'paths'],
-        properties: {
-          id: {
-            type: 'string',
-            title: 'Group ID',
-            description: 'Unique identifier for this group (e.g., totalFuel)'
-          },
-          name: {
-            type: 'string',
-            title: 'Display Name',
-            description: 'Human-readable name (e.g., "Total Fuel Tanks")'
-          },
-          type: {
-            type: 'string',
-            title: 'Group Type',
-            enum: ['tankage', 'power'],
-            description: 'Type of items being grouped'
-          },
-          paths: {
-            type: 'array',
-            title: 'Paths to Include',
-            description: 'List of paths to sum together',
-            items: {
-              type: 'string'
-            }
-          }
-        }
-      }
-    },
     reporting: {
       type: 'object',
       title: 'Reporting Configuration',
@@ -194,7 +154,7 @@ module.exports = {
           type: 'number',
           title: 'Update Interval (seconds)',
           default: 20,
-          description: 'How often to recalculate and publish usage statistics'
+          description: 'How often to recalculate usage statistics'
         },
         cacheResults: {
           type: 'boolean',

@@ -19,6 +19,11 @@ Publisher.prototype.start = function() {
   }, interval);
 };
 
+Publisher.prototype.round = function(value) {
+  // Round to 1 decimal place
+  return Math.round(value * 10) / 10;
+};
+
 Publisher.prototype.publish = function() {
   const usageData = this.usageCoordinator.getUsageData();
   
@@ -50,7 +55,6 @@ Publisher.prototype.publish = function() {
 
   this.publishTankageItems(tankageItems, deltas, meta);
   this.publishPowerItems(powerItems, deltas, meta);
-  this.publishGroups(usageData.groups, deltas, meta);
 
   if (deltas.length > 0) {
     const delta = {
@@ -96,10 +100,10 @@ Publisher.prototype.publishTankageItems = function(items, deltas, meta) {
         return;
       }
       
-      // Publish normal values
+      // Publish normal values (rounded to 1 decimal)
       deltas.push({
         path: `${basePath}.consumed.${period}`,
-        value: periodData.consumed || 0
+        value: this.round(periodData.consumed || 0)
       });
       meta.push({
         path: `${basePath}.consumed.${period}`,
@@ -108,7 +112,7 @@ Publisher.prototype.publishTankageItems = function(items, deltas, meta) {
       
       deltas.push({
         path: `${basePath}.added.${period}`,
-        value: periodData.added || 0
+        value: this.round(periodData.added || 0)
       });
       meta.push({
         path: `${basePath}.added.${period}`,
@@ -117,7 +121,7 @@ Publisher.prototype.publishTankageItems = function(items, deltas, meta) {
       
       deltas.push({
         path: `${basePath}.consumptionRate.${period}`,
-        value: periodData.consumptionRate || 0
+        value: this.round(periodData.consumptionRate || 0)
       });
       meta.push({
         path: `${basePath}.consumptionRate.${period}`,
@@ -172,12 +176,12 @@ Publisher.prototype.publishPowerItems = function(items, deltas, meta) {
       // Skip if no energy data
       if (!periodData.energy) return;
       
-      // Publish normal values
+      // Publish normal values (rounded to 1 decimal)
       if (directionality === 'producer') {
         // Only publish generated
         deltas.push({
           path: `${basePath}.${generatedLabel}.${period}`,
-          value: periodData.energy.generatedWh || 0
+          value: this.round(periodData.energy.generatedWh || 0)
         });
         meta.push({
           path: `${basePath}.${generatedLabel}.${period}`,
@@ -187,7 +191,7 @@ Publisher.prototype.publishPowerItems = function(items, deltas, meta) {
         // Only publish consumed
         deltas.push({
           path: `${basePath}.${consumedLabel}.${period}`,
-          value: periodData.energy.consumedWh || 0
+          value: this.round(periodData.energy.consumedWh || 0)
         });
         meta.push({
           path: `${basePath}.${consumedLabel}.${period}`,
@@ -197,7 +201,7 @@ Publisher.prototype.publishPowerItems = function(items, deltas, meta) {
         // Bidirectional or auto-detected - publish both
         deltas.push({
           path: `${basePath}.${consumedLabel}.${period}`,
-          value: periodData.energy.consumedWh || 0
+          value: this.round(periodData.energy.consumedWh || 0)
         });
         meta.push({
           path: `${basePath}.${consumedLabel}.${period}`,
@@ -206,63 +210,12 @@ Publisher.prototype.publishPowerItems = function(items, deltas, meta) {
         
         deltas.push({
           path: `${basePath}.${generatedLabel}.${period}`,
-          value: periodData.energy.generatedWh || 0
+          value: this.round(periodData.energy.generatedWh || 0)
         });
         meta.push({
           path: `${basePath}.${generatedLabel}.${period}`,
           value: { units: 'Wh' }
         });
-      }
-    });
-  });
-};
-
-Publisher.prototype.publishGroups = function(groups, deltas, meta) {
-  Object.values(groups || {}).forEach(group => {
-    const basePath = `usage.groups.${group.id}`;
-
-    // Each group has its own periods (collected from member items)
-    Object.entries(group.periods || {}).forEach(([period, periodData]) => {
-      if (!periodData) return;
-
-      if (group.type === 'tankage') {
-        deltas.push({
-          path: `${basePath}.consumed.${period}`,
-          value: periodData.consumed || 0
-        });
-        meta.push({
-          path: `${basePath}.consumed.${period}`,
-          value: { units: 'm3' }
-        });
-        
-        deltas.push({
-          path: `${basePath}.added.${period}`,
-          value: periodData.added || 0
-        });
-        meta.push({
-          path: `${basePath}.added.${period}`,
-          value: { units: 'm3' }
-        });
-      } else if (group.type === 'power') {
-        if (periodData.energy) {
-          deltas.push({
-            path: `${basePath}.consumedWh.${period}`,
-            value: periodData.energy.consumedWh || 0
-          });
-          meta.push({
-            path: `${basePath}.consumedWh.${period}`,
-            value: { units: 'Wh' }
-          });
-          
-          deltas.push({
-            path: `${basePath}.generatedWh.${period}`,
-            value: periodData.energy.generatedWh || 0
-          });
-          meta.push({
-            path: `${basePath}.generatedWh.${period}`,
-            value: { units: 'Wh' }
-          });
-        }
       }
     });
   });

@@ -1,7 +1,7 @@
 {
     "name": "signalk-usage",
     "version": "0.1.0",
-    "description": "Analyze and report onboard usage of tanks, batteries, and energy from existing InfluxDB data",
+    "description": "Keep track of tank & electrical usage",
     "main": "plugin/index.js",
     "keywords": [
       "signalk-node-server-plugin",
@@ -13,7 +13,7 @@
       "batteries",
       "influxdb"
     ],
-    "author": "Your Name",
+    "author": "Oliver Fernander",
     "license": "MIT",
     "repository": {
       "type": "git",
