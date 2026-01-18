@@ -153,7 +153,7 @@ module.exports = {
         updateInterval: {
           type: 'number',
           title: 'Update Interval (seconds)',
-          default: 20,
+          default: 300,
           description: 'How often to recalculate usage statistics'
         },
         cacheResults: {

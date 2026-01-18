@@ -6,7 +6,7 @@ const Publisher = require('./lib/publisher');
 module.exports = function (app) {
   let plugin = {
     id: 'signalk-usage',
-    name: 'SignalK Usage',
+    name: 'SignalK-Usage',
     description: 'Report Electrical and Tank Usage',
     schema: schema,
     
@@ -18,7 +18,7 @@ module.exports = function (app) {
 
   plugin.start = function (options, restartPlugin) {
     try {
-      app.debug('Starting SignalK Usage plugin');
+      app.debug('Starting SignalK-Usage plugin');
       
       // Validate configuration
       if (!options.influx) {
@@ -95,7 +95,7 @@ module.exports = function (app) {
 
   plugin.stop = function () {
     try {
-      app.debug('Stopping SignalK Usage plugin');
+      app.debug('Stopping SignalK-Usage plugin');
       
       if (plugin.updateTimer) {
         clearInterval(plugin.updateTimer);
