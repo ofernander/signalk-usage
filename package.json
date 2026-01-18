@@ -4,27 +4,27 @@
     "description": "Track electrical and tank usage",
     "main": "plugin/index.js",
     "keywords": [
-      "signalk-node-server-plugin",
-      "signalk-category-utility",
-      "signalk",
-      "usage",
-      "reporting",
-      "analytics",
-      "tanks",
-      "batteries",
-      "influxdb"
+        "signalk-node-server-plugin",
+        "signalk-category-utility",
+        "signalk",
+        "usage",
+        "reporting",
+        "analytics",
+        "tanks",
+        "batteries",
+        "influxdb"
     ],
     "author": "Oliver Fernander",
     "license": "MIT",
     "repository": {
-      "type": "git",
-      "url": "https://github.com/ofernander/signalk-usage.git"
+        "type": "git",
+        "url": "git+https://github.com/ofernander/signalk-usage.git"
     },
     "dependencies": {
-      "@influxdata/influxdb-client": "^1.33.2"
+        "@influxdata/influxdb-client": "^1.33.2"
     },
     "engines": {
-      "node": ">=16.0.0"
+        "node": ">=16.0.0"
     },
     "signalk-plugin-enabled-by-default": false
-  }
+}
