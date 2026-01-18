@@ -18,7 +18,7 @@
     "license": "MIT",
     "repository": {
       "type": "git",
-      "url": "https://github.com/yourusername/signalk-usage.git"
+      "url": "https://github.com/ofernander/signalk-usage.git"
     },
     "dependencies": {
       "@influxdata/influxdb-client": "^1.33.2"
