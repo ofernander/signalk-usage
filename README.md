@@ -1,4 +1,4 @@
-# SignalK Usage
+# signalk-usage
 
 Uses infuxDB data to caculate tank and electrical usage
 
