@@ -1,0 +1,29 @@
+{
+    "name": "signalk-usage",
+    "version": "0.1.0",
+    "description": "Analyze and report onboard usage of tanks, batteries, and energy from existing InfluxDB data",
+    "main": "plugin/index.js",
+    "keywords": [
+      "signalk-node-server-plugin",
+      "signalk",
+      "usage",
+      "reporting",
+      "analytics",
+      "tanks",
+      "batteries",
+      "influxdb"
+    ],
+    "author": "Your Name",
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/yourusername/signalk-usage.git"
+    },
+    "dependencies": {
+      "@influxdata/influxdb-client": "^1.33.2"
+    },
+    "engines": {
+      "node": ">=16.0.0"
+    },
+    "signalk-plugin-enabled-by-default": false
+  }
