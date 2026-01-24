@@ -2,27 +2,26 @@
  * TankageEngine - Calculates tank usage (consumption and additions)
  * 
  * Filtering approach:
- * - Time filter: Only process changes >= X minutes apart (filters rapid sensor noise)
+ * - Time filter: Only process changes >= 2 minutes apart (filters rapid sensor noise)
  * - Addition requirements: 
- *   - Small tanks: >= X gallon increase over >= X minutes
- *   - Large tanks: >= X gallon increase over >= X minutes
+ *   - Small tanks: >= 1 gallon increase over >= 5 minutes
+ *   - Large tanks: >= 5 gallon increase over >= 5 minutes
  * - Consumption: No quantity threshold, just time filter
  */
 
 const MIN_TIME_BETWEEN_POINTS_MS = 2 * 60 * 1000;  // 2 minutes
+const ADDITION_MIN_DURATION_MS = 5 * 60 * 1000;     // 5 minutes
+const SMALL_TANK_ADDITION_GAL = 1.0;
+const LARGE_TANK_ADDITION_GAL = 5.0;
 const M3_TO_GAL = 264.172;
 const GAL_TO_M3 = 0.00378541;
 
-// Consumption calculation - different smoothing for short vs long periods
-const SHORT_PERIOD_THRESHOLD_MS = 24 * 60 * 60 * 1000; // X hours
-const SHORT_PERIOD_SMOOTHING_PERCENT = 0.25; // X% for periods ≤ X hours
-const LONG_PERIOD_SMOOTHING_PERCENT = 0.06; // X% for periods > X hours
+// Smoothing window to filter sensor noise
+const SMOOTHING_WINDOW_MS = 6 * 60 * 60 * 1000; // 6 hours
 
-// Addition calculation - light smoothing to preserve refills
-const ADDITION_SMOOTHING_MS = 1 * 60 * 60 * 1000; // X hour (fixed)
-const SMALL_TANK_ADDITION_GAL = 1.0;
-const LARGE_TANK_ADDITION_GAL = 5.0;
-const ADDITION_MIN_DURATION_MS = 5 * 60 * 1000; // X minutes
+// Large refill detection - jumps this big skip smoothing and get counted directly
+const LARGE_REFILL_THRESHOLD_GAL = 10.0; // 10 gallon jump = obvious refill
+const LARGE_REFILL_THRESHOLD_M3 = LARGE_REFILL_THRESHOLD_GAL * GAL_TO_M3;
 
 function TankageEngine(app, influxClient, options) {
   this.app = app;
@@ -152,107 +151,103 @@ TankageEngine.prototype.processDataPoints = function(dataPoints, item) {
   const additionThresholdGal = isLargeTank ? LARGE_TANK_ADDITION_GAL : SMALL_TANK_ADDITION_GAL;
   const additionThresholdM3 = additionThresholdGal * GAL_TO_M3;
   
-  // Calculate consumption smoothing window based on data range
-  const dataRangeMs = dataPoints[dataPoints.length - 1].timestamp - dataPoints[0].timestamp;
-  const smoothingPercent = dataRangeMs <= SHORT_PERIOD_THRESHOLD_MS 
-    ? SHORT_PERIOD_SMOOTHING_PERCENT 
-    : LONG_PERIOD_SMOOTHING_PERCENT;
-  const consumptionSmoothingMs = dataRangeMs * smoothingPercent;
+  this.app.debug(`TankageEngine: ${path} - Processing ${dataPoints.length} points, Tank type: ${isLargeTank ? 'large' : 'small'} (${additionThresholdGal} gal threshold)`);
   
-  this.app.debug(`TankageEngine: ${path} - Processing ${dataPoints.length} points, Tank type: ${isLargeTank ? 'large' : 'small'}, Consumption smoothing: ${(consumptionSmoothingMs / 3600000).toFixed(1)} hours (${(smoothingPercent * 100).toFixed(0)}% of ${(dataRangeMs / 3600000).toFixed(1)} hour range)`);
+  // Step 1: Detect large refills in raw data (>10 gal jumps)
+  const largeRefillIndices = new Set();
   
-  // CONSUMPTION CALCULATION - Dual smoothing (X% for ≤Xh, X% for >Xh) to filter dips
-  const consumptionSmoothed = [];
+  for (let i = 1; i < dataPoints.length; i++) {
+    const prevPoint = dataPoints[i - 1];
+    const currPoint = dataPoints[i];
+    const change = currPoint.value - prevPoint.value;
+    
+    // If increase is >= 10 gallons, mark as large refill
+    if (change >= LARGE_REFILL_THRESHOLD_M3) {
+      largeRefillIndices.add(i);
+      this.app.debug(`TankageEngine: ${path} - Large refill detected: ${(change * M3_TO_GAL).toFixed(2)} gal at index ${i}, preserving from smoothing`);
+    }
+  }
+  
+  // Step 2: Apply 6-hour moving average to smooth sensor noise (except large refills)
+  const smoothedPoints = [];
+  
   for (let i = 0; i < dataPoints.length; i++) {
     const currentPoint = dataPoints[i];
-    const windowStart = currentPoint.timestamp - consumptionSmoothingMs;
+    
+    // If this point is part of a large refill, use raw value and reset smoothing baseline
+    if (largeRefillIndices.has(i)) {
+      smoothedPoints.push({
+        timestamp: currentPoint.timestamp,
+        value: currentPoint.value
+      });
+      // After a large refill, subsequent points should start smoothing from this new baseline
+      // This is automatically handled by the moving window looking back
+      continue;
+    }
+    
+    const windowStart = currentPoint.timestamp - SMOOTHING_WINDOW_MS;
+    
+    // Collect all points within the 6-hour window
+    // But only start from the most recent large refill if one exists
+    let startIndex = 0;
+    for (let k = i; k >= 0; k--) {
+      if (largeRefillIndices.has(k)) {
+        startIndex = k; // Start smoothing from the refill point, not before it
+        break;
+      }
+    }
     
     const windowPoints = [];
-    for (let j = 0; j <= i; j++) {
+    for (let j = startIndex; j <= i; j++) {
       if (dataPoints[j].timestamp >= windowStart) {
         windowPoints.push(dataPoints[j]);
       }
     }
     
+    // Calculate average value
     const avgValue = windowPoints.reduce((sum, p) => sum + p.value, 0) / windowPoints.length;
-    consumptionSmoothed.push({
+    
+    smoothedPoints.push({
       timestamp: currentPoint.timestamp,
       value: avgValue
     });
   }
   
-  // Calculate consumption from heavily smoothed data
+  // Step 3: Calculate consumption and additions from smoothed data
   let totalConsumed = 0;
-  let lastConsumptionPoint = consumptionSmoothed[0];
-  
-  for (let i = 1; i < consumptionSmoothed.length; i++) {
-    const prevPoint = lastConsumptionPoint;
-    const currPoint = consumptionSmoothed[i];
-    const timeDiffMs = currPoint.timestamp - prevPoint.timestamp;
-    
-    if (timeDiffMs < MIN_TIME_BETWEEN_POINTS_MS) {
-      continue;
-    }
-    
-    const changeM3 = currPoint.value - prevPoint.value;
-    
-    // Only count decreases
-    if (changeM3 < 0) {
-      totalConsumed += Math.abs(changeM3);
-    }
-    
-    lastConsumptionPoint = currPoint;
-  }
-  
-  // ADDITION CALCULATION - Light smoothing (X hour) to preserve refills
-  const additionSmoothed = [];
-  for (let i = 0; i < dataPoints.length; i++) {
-    const currentPoint = dataPoints[i];
-    const windowStart = currentPoint.timestamp - ADDITION_SMOOTHING_MS;
-    
-    const windowPoints = [];
-    for (let j = 0; j <= i; j++) {
-      if (dataPoints[j].timestamp >= windowStart) {
-        windowPoints.push(dataPoints[j]);
-      }
-    }
-    
-    const avgValue = windowPoints.reduce((sum, p) => sum + p.value, 0) / windowPoints.length;
-    additionSmoothed.push({
-      timestamp: currentPoint.timestamp,
-      value: avgValue
-    });
-  }
-  
-  // Calculate additions from lightly smoothed data
   let totalAdded = 0;
-  let lastAdditionPoint = additionSmoothed[0];
+  let lastTrackedPoint = smoothedPoints[0];
   
-  for (let i = 1; i < additionSmoothed.length; i++) {
-    const prevPoint = lastAdditionPoint;
-    const currPoint = additionSmoothed[i];
+  for (let i = 1; i < smoothedPoints.length; i++) {
+    const prevPoint = lastTrackedPoint;
+    const currPoint = smoothedPoints[i];
     const timeDiffMs = currPoint.timestamp - prevPoint.timestamp;
     
+    // Only process points that are at least 2 minutes apart
     if (timeDiffMs < MIN_TIME_BETWEEN_POINTS_MS) {
       continue;
     }
     
     const changeM3 = currPoint.value - prevPoint.value;
     
-    // Only count increases that meet thresholds
     if (changeM3 > 0) {
+      // Tank increased - check if it meets addition criteria
       const meetsQuantity = changeM3 >= additionThresholdM3;
       const meetsDuration = timeDiffMs >= ADDITION_MIN_DURATION_MS;
       
       if (meetsQuantity && meetsDuration) {
         totalAdded += changeM3;
       }
+      
+    } else if (changeM3 < 0) {
+      // Tank decreased - consumption
+      totalConsumed += Math.abs(changeM3);
     }
     
-    lastAdditionPoint = currPoint;
+    lastTrackedPoint = currPoint;
   }
   
-  this.app.debug(`TankageEngine: ${path} - Consumed: ${(totalConsumed * M3_TO_GAL).toFixed(2)} gal (Xhr smooth), Added: ${(totalAdded * M3_TO_GAL).toFixed(2)} gal (Xhr smooth)`);
+  this.app.debug(`TankageEngine: ${path} - Consumed: ${(totalConsumed * M3_TO_GAL).toFixed(2)} gal, Added: ${(totalAdded * M3_TO_GAL).toFixed(2)} gal`);
   
   return {
     consumed: totalConsumed,
@@ -268,80 +263,68 @@ TankageEngine.prototype.calculateTankageFromData = function(dataPoints, isLargeT
   const additionThresholdGal = isLargeTank ? LARGE_TANK_ADDITION_GAL : SMALL_TANK_ADDITION_GAL;
   const additionThresholdM3 = additionThresholdGal * GAL_TO_M3;
   
-  // Calculate consumption smoothing window based on data range
-  const dataRangeMs = dataPoints[dataPoints.length - 1].timestamp - dataPoints[0].timestamp;
-  const smoothingPercent = dataRangeMs <= SHORT_PERIOD_THRESHOLD_MS 
-    ? SHORT_PERIOD_SMOOTHING_PERCENT 
-    : LONG_PERIOD_SMOOTHING_PERCENT;
-  const consumptionSmoothingMs = dataRangeMs * smoothingPercent;
+  // Step 1: Detect large refills in raw data
+  const largeRefillIndices = new Set();
   
-  // CONSUMPTION - Dual smoothing (X% for ≤Xh, X% for >Xh)
-  const consumptionSmoothed = [];
-  for (let i = 0; i < dataPoints.length; i++) {
-    const currentPoint = dataPoints[i];
-    const windowStart = currentPoint.timestamp - consumptionSmoothingMs;
+  for (let i = 1; i < dataPoints.length; i++) {
+    const prevPoint = dataPoints[i - 1];
+    const currPoint = dataPoints[i];
+    const change = currPoint.value - prevPoint.value;
     
-    const windowPoints = [];
-    for (let j = 0; j <= i; j++) {
-      if (dataPoints[j].timestamp >= windowStart) {
-        windowPoints.push(dataPoints[j]);
-      }
+    if (change >= LARGE_REFILL_THRESHOLD_M3) {
+      largeRefillIndices.add(i);
     }
-    
-    const avgValue = windowPoints.reduce((sum, p) => sum + p.value, 0) / windowPoints.length;
-    consumptionSmoothed.push({
-      timestamp: currentPoint.timestamp,
-      value: avgValue
-    });
   }
   
-  let totalConsumed = 0;
-  let lastConsumptionPoint = consumptionSmoothed[0];
+  // Step 2: Apply 6-hour moving average smoothing (except large refills)
+  const smoothedPoints = [];
   
-  for (let i = 1; i < consumptionSmoothed.length; i++) {
-    const prevPoint = lastConsumptionPoint;
-    const currPoint = consumptionSmoothed[i];
-    const timeDiffMs = currPoint.timestamp - prevPoint.timestamp;
+  for (let i = 0; i < dataPoints.length; i++) {
+    const currentPoint = dataPoints[i];
     
-    if (timeDiffMs < MIN_TIME_BETWEEN_POINTS_MS) {
+    // Preserve raw value for large refills
+    if (largeRefillIndices.has(i)) {
+      smoothedPoints.push({
+        timestamp: currentPoint.timestamp,
+        value: currentPoint.value
+      });
       continue;
     }
     
-    const changeM3 = currPoint.value - prevPoint.value;
+    const windowStart = currentPoint.timestamp - SMOOTHING_WINDOW_MS;
     
-    if (changeM3 < 0) {
-      totalConsumed += Math.abs(changeM3);
+    // Find most recent large refill to use as baseline
+    let startIndex = 0;
+    for (let k = i; k >= 0; k--) {
+      if (largeRefillIndices.has(k)) {
+        startIndex = k;
+        break;
+      }
     }
     
-    lastConsumptionPoint = currPoint;
-  }
-  
-  // ADDITION - Light smoothing (X hour)
-  const additionSmoothed = [];
-  for (let i = 0; i < dataPoints.length; i++) {
-    const currentPoint = dataPoints[i];
-    const windowStart = currentPoint.timestamp - ADDITION_SMOOTHING_MS;
-    
     const windowPoints = [];
-    for (let j = 0; j <= i; j++) {
+    for (let j = startIndex; j <= i; j++) {
       if (dataPoints[j].timestamp >= windowStart) {
         windowPoints.push(dataPoints[j]);
       }
     }
     
     const avgValue = windowPoints.reduce((sum, p) => sum + p.value, 0) / windowPoints.length;
-    additionSmoothed.push({
+    
+    smoothedPoints.push({
       timestamp: currentPoint.timestamp,
       value: avgValue
     });
   }
   
+  // Step 3: Calculate from smoothed data
+  let totalConsumed = 0;
   let totalAdded = 0;
-  let lastAdditionPoint = additionSmoothed[0];
+  let lastTrackedPoint = smoothedPoints[0];
   
-  for (let i = 1; i < additionSmoothed.length; i++) {
-    const prevPoint = lastAdditionPoint;
-    const currPoint = additionSmoothed[i];
+  for (let i = 1; i < smoothedPoints.length; i++) {
+    const prevPoint = lastTrackedPoint;
+    const currPoint = smoothedPoints[i];
     const timeDiffMs = currPoint.timestamp - prevPoint.timestamp;
     
     if (timeDiffMs < MIN_TIME_BETWEEN_POINTS_MS) {
@@ -351,15 +334,14 @@ TankageEngine.prototype.calculateTankageFromData = function(dataPoints, isLargeT
     const changeM3 = currPoint.value - prevPoint.value;
     
     if (changeM3 > 0) {
-      const meetsQuantity = changeM3 >= additionThresholdM3;
-      const meetsDuration = timeDiffMs >= ADDITION_MIN_DURATION_MS;
-      
-      if (meetsQuantity && meetsDuration) {
+      if (changeM3 >= additionThresholdM3 && timeDiffMs >= ADDITION_MIN_DURATION_MS) {
         totalAdded += changeM3;
       }
+    } else if (changeM3 < 0) {
+      totalConsumed += Math.abs(changeM3);
     }
     
-    lastAdditionPoint = currPoint;
+    lastTrackedPoint = currPoint;
   }
   
   return {
