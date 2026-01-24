@@ -101,10 +101,10 @@ Publisher.prototype.publishTankageItems = function(items, deltas, meta) {
         return;
       }
       
-      // Publish totals with 1 decimal place
+      // Publish totals with 3 decimal places for better precision when converting to L/gal
       deltas.push({
         path: `${basePath}.consumed.${period}`,
-        value: this.round(periodData.consumed || 0, 1)
+        value: this.round(periodData.consumed || 0, 3)
       });
       meta.push({
         path: `${basePath}.consumed.${period}`,
@@ -113,21 +113,11 @@ Publisher.prototype.publishTankageItems = function(items, deltas, meta) {
       
       deltas.push({
         path: `${basePath}.added.${period}`,
-        value: this.round(periodData.added || 0, 1)
+        value: this.round(periodData.added || 0, 3)
       });
       meta.push({
         path: `${basePath}.added.${period}`,
         value: { units: unit }
-      });
-      
-      // Publish rates with 4 decimal places (more precision needed)
-      deltas.push({
-        path: `${basePath}.consumptionRate.${period}`,
-        value: this.round(periodData.consumptionRate || 0, 4)
-      });
-      meta.push({
-        path: `${basePath}.consumptionRate.${period}`,
-        value: { units: `${unit}/h` }
       });
     });
   });
@@ -224,11 +214,8 @@ Publisher.prototype.publishPowerItems = function(items, deltas, meta) {
 };
 
 Publisher.prototype.getBasePath = function(item) {
-  // If user provided a custom name, use it in the path
-  // Otherwise use the full SignalK path
-  if (item.name && item.name !== item.path) {
-    return 'usage.' + item.name;
-  }
+  // Always use the full SignalK path for deltas
+  // Display name is only for UI presentation
   return 'usage.' + item.path;
 };
 

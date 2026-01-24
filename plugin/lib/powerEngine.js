@@ -290,6 +290,21 @@ PowerEngine.prototype.autoDetectDirectionalityType = function(path) {
   }
 };
 
+PowerEngine.prototype.autoDetectBidirectionalPolarity = function(positiveEnergyWh, negativeEnergyWh) {
+  // For bidirectional items, detect which direction is which based on magnitudes
+  // If positive energy is significantly larger, it's likely normal polarity
+  // If negative energy is larger, it's likely reversed
+  
+  if (positiveEnergyWh > negativeEnergyWh * 1.5) {
+    return 'normal';  // Positive = generated, Negative = consumed
+  } else if (negativeEnergyWh > positiveEnergyWh * 1.5) {
+    return 'reversed';  // Positive = consumed, Negative = generated
+  } else {
+    // Similar magnitudes - default to normal
+    return 'normal';
+  }
+};
+
 PowerEngine.prototype.applyDirectionality = function(path, directionality, positiveEnergyWh, negativeEnergyWh) {
   let consumedWh, generatedWh, appliedDirectionality;
   
@@ -309,6 +324,20 @@ PowerEngine.prototype.applyDirectionality = function(path, directionality, posit
       appliedDirectionality = 'consumer (explicit)';
       if (negativeEnergyWh > 0.1) {
         this.app.debug(`  Note: Filtered out ${negativeEnergyWh.toFixed(2)} Wh negative energy (noise)`);
+      }
+      break;
+      
+    case 'bidirectional':
+      // Simple bidirectional - use auto-detection to determine normal vs reversed
+      const detectedDirection = this.autoDetectBidirectionalPolarity(positiveEnergyWh, negativeEnergyWh);
+      if (detectedDirection === 'normal') {
+        consumedWh = negativeEnergyWh;
+        generatedWh = positiveEnergyWh;
+        appliedDirectionality = 'bidirectional (auto-detected normal)';
+      } else {
+        consumedWh = positiveEnergyWh;
+        generatedWh = negativeEnergyWh;
+        appliedDirectionality = 'bidirectional (auto-detected reversed)';
       }
       break;
       

@@ -100,6 +100,45 @@ InfluxClient.prototype.queryPathRaw = async function(path, range) {
   });
 };
 
+InfluxClient.prototype.queryPathCustomRange = async function(path, start, end, aggregation) {
+  const query = `
+    from(bucket: "${this.config.bucket}")
+      |> range(start: ${start}, stop: ${end})
+      |> filter(fn: (r) => r._measurement == "${path}")
+      |> filter(fn: (r) => r._field == "value")
+      |> filter(fn: (r) => r.self == "true")
+      |> aggregateWindow(every: ${aggregation}, fn: mean, createEmpty: false)
+      |> sort(columns: ["_time"])
+  `;
+
+  this.app.debug(`Executing custom range query for ${path}:`);
+  this.app.debug(query);
+
+  const self = this;
+  
+  return new Promise((resolve, reject) => {
+    const results = [];
+    
+    self.queryApi.queryRows(query, {
+      next: (row, tableMeta) => {
+        const obj = tableMeta.toObject(row);
+        results.push({
+          timestamp: new Date(obj._time).getTime(),
+          value: obj._value
+        });
+      },
+      error: (err) => {
+        self.app.debug(`Custom query error for ${path}: ${err.message}`);
+        reject(err);
+      },
+      complete: () => {
+        self.app.debug(`Custom query complete for ${path}: ${results.length} points`);
+        resolve(results);
+      }
+    });
+  });
+};
+
 InfluxClient.prototype.getAggregateWindow = function(range) {
   if (range === '-1h' || range === '-15m') return '1m';
   if (range === '-6h') return '5m';

@@ -49,8 +49,8 @@ module.exports = {
           },
           name: {
             type: 'string',
-            title: 'Name',
-            description: 'Display name (optional, defaults to path)'
+            title: 'Display Name',
+            description: 'Optional friendly name for this tank'
           },
           periods: {
             type: 'array',
@@ -58,9 +58,9 @@ module.exports = {
             format: 'table',
             default: [
               { range: '1h', aggregation: '1m' },
-              { range: '24h', aggregation: '3m' },
-              { range: '7d', aggregation: '5m' },
-              { range: '30d', aggregation: '10m' }
+              { range: '24h', aggregation: '15m' },
+              { range: '7d', aggregation: '1h' },
+              { range: '30d', aggregation: '4h' }
             ],
             items: {
               type: 'object',
@@ -69,19 +69,16 @@ module.exports = {
               properties: {
                 range: {
                   type: 'string',
-                  title: 'Range'
+                  title: 'Range',
+                  description: 'Time range (e.g., 30s, 1h, 24h, 7d, 30d)'
                 },
                 aggregation: {
                   type: 'string',
-                  title: 'Aggregation'
+                  title: 'Aggregation',
+                  description: 'Data aggregation window (e.g., 5s, 1m, 15m, 1h)'
                 }
               }
             }
-          },
-          enabled: {
-            type: 'boolean',
-            title: 'Enabled',
-            default: true
           }
         }
       }
@@ -92,7 +89,7 @@ module.exports = {
       default: [],
       items: {
         type: 'object',
-        title: 'Power Source',
+        title: 'Power Item',
         required: ['path', 'periods'],
         properties: {
           path: {
@@ -102,15 +99,15 @@ module.exports = {
           },
           name: {
             type: 'string',
-            title: 'Name',
-            description: 'Display name (optional, defaults to path)'
+            title: 'Display Name',
+            description: 'Optional friendly name for this item'
           },
           directionality: {
             type: 'string',
-            title: 'Direction',
-            enum: ['', 'producer', 'consumer', 'bidirectional-normal', 'bidirectional-reversed'],
-            description: 'Energy flow direction (blank = auto-detect)',
-            default: ''
+            title: 'Directionality',
+            enum: ['producer', 'consumer', 'bidirectional', 'auto'],
+            default: 'auto',
+            description: 'How power flows: producer (generates), consumer (uses), bidirectional (both), or auto (detect from data)'
           },
           periods: {
             type: 'array',
@@ -118,9 +115,9 @@ module.exports = {
             format: 'table',
             default: [
               { range: '1h', aggregation: '1m' },
-              { range: '24h', aggregation: '3m' },
-              { range: '7d', aggregation: '5m' },
-              { range: '30d', aggregation: '10m' }
+              { range: '24h', aggregation: '15m' },
+              { range: '7d', aggregation: '1h' },
+              { range: '30d', aggregation: '4h' }
             ],
             items: {
               type: 'object',
@@ -129,11 +126,13 @@ module.exports = {
               properties: {
                 range: {
                   type: 'string',
-                  title: 'Range'
+                  title: 'Range',
+                  description: 'Time range (e.g., 30m, 1h, 24h, 7d, 30d)'
                 },
                 aggregation: {
                   type: 'string',
-                  title: 'Aggregation'
+                  title: 'Aggregation',
+                  description: 'Data aggregation window (e.g., 30s, 1m, 15m, 1h)'
                 }
               }
             }
@@ -161,6 +160,13 @@ module.exports = {
           title: 'Cache Results',
           default: true,
           description: 'Cache calculated results to reduce InfluxDB queries'
+        },
+        unitPreference: {
+          type: 'string',
+          title: 'Volume Units (Web UI)',
+          enum: ['metric', 'imperial'],
+          default: 'metric',
+          description: 'Display volumes in Liters (metric) or Gallons (imperial) in the web interface'
         }
       }
     }

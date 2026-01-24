@@ -170,24 +170,23 @@ TankageEngine.prototype.calculateUsageForPeriod = async function(item, period) {
       };
     }
 
-    // Sum all increases and decreases from aggregated data
-    // No threshold needed - aggregation already smoothed out boat motion
-    let totalAdded = 0;
+    // Simple net change approach: first reading vs last reading
+    // No summing between points, no threshold needed
+    const netChange = last.value - first.value;
+    
+    this.app.debug(`TankageEngine: ${path} - Start: ${first.value.toFixed(4)} m³, End: ${last.value.toFixed(4)} m³, Net Change: ${netChange.toFixed(4)} m³ (${(netChange / 0.00378541).toFixed(2)} gal)`);
+    
+    // If net is negative: consumed (tank went down)
+    // If net is positive: added (tank went up)
     let totalConsumed = 0;
+    let totalAdded = 0;
     
-    for (let i = 1; i < dataPoints.length; i++) {
-      const prev = dataPoints[i - 1];
-      const curr = dataPoints[i];
-      const change = curr.value - prev.value;
-      
-      if (change > 0) {
-        totalAdded += change;
-      } else if (change < 0) {
-        totalConsumed += Math.abs(change);
-      }
+    if (netChange < 0) {
+      totalConsumed = Math.abs(netChange);
+    } else if (netChange > 0) {
+      totalAdded = netChange;
     }
-    
-    this.app.debug(`TankageEngine: ${path} - Added: ${totalAdded.toFixed(4)}, Consumed: ${totalConsumed.toFixed(4)} from ${dataPoints.length} aggregated points`);
+    // If netChange === 0, both stay 0
     
     usage.consumed = totalConsumed;
     usage.added = totalAdded;

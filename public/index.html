@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SignalK Usage</title>
+    <link rel="stylesheet" href="css/core.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-content">
+                <h1><img src="./assets/icons/signalk-usage-icon_72x72.png" alt="" style="height: 72px; vertical-align: middle; margin-right: 0.5rem;">SignalK-Usage</h1>
+                <div class="status-indicator">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Connecting...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" data-tab="dashboard">Dashboard</button>
+            <button class="tab" data-tab="custom">Custom Query</button>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Dashboard Tab -->
+            <div id="dashboard" class="tab-content active">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>⚡ Electrical Power</h2>
+                        <div class="card-subtitle">Real-time energy consumption and generation</div>
+                    </div>
+                    <div class="card-body">
+                        <div id="powerStats" class="stats-grid">
+                            <div class="loading">Waiting for data...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🚰 Tankage</h2>
+                        <div class="card-subtitle">Real-time tank level changes</div>
+                    </div>
+                    <div class="card-body">
+                        <div id="tankageStats" class="stats-grid">
+                            <div class="loading">Waiting for data...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Custom Query Tab -->
+            <div id="custom" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Custom Time Range Query</h2>
+                        <div class="card-subtitle">Query specific date/time ranges for detailed analysis</div>
+                    </div>
+                    <div class="card-body">
+                        <form id="queryForm">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="queryType">Query Type:</label>
+                                    <select id="queryType" class="form-control">
+                                        <option value="power">Electrical Power</option>
+                                        <option value="tankage">Tankage</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="queryPath">Path:</label>
+                                    <select id="queryPath" class="form-control">
+                                        <option value="">Select a path...</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="startDate">Start Date & Time:</label>
+                                    <input type="datetime-local" id="startDate" class="form-control" step="60">
+                                </div>
+                                <div class="form-group">
+                                    <label for="endDate">End Date & Time:</label>
+                                    <input type="datetime-local" id="endDate" class="form-control" step="60">
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="aggregation">Aggregation Window:</label>
+                                    <select id="aggregation" class="form-control">
+                                        <option value="1m">1 minute</option>
+                                        <option value="5m" selected>5 minutes</option>
+                                        <option value="15m">15 minutes</option>
+                                        <option value="30m">30 minutes</option>
+                                        <option value="1h">1 hour</option>
+                                        <option value="3h">3 hours</option>
+                                        <option value="6h">6 hours</option>
+                                        <option value="12h">12 hours</option>
+                                        <option value="1d">1 day</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>&nbsp;</label>
+                                    <button type="submit" class="btn btn-primary" style="width: 100%;">
+                                        🔍 Run Query
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="quick-ranges">
+                                <span class="label">Quick Ranges:</span>
+                                <button type="button" class="btn btn-small" data-range="1h">Last Hour</button>
+                                <button type="button" class="btn btn-small" data-range="6h">Last 6 Hours</button>
+                                <button type="button" class="btn btn-small" data-range="24h">Last 24 Hours</button>
+                                <button type="button" class="btn btn-small" data-range="7d">Last 7 Days</button>
+                                <button type="button" class="btn btn-small" data-range="30d">Last 30 Days</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div id="queryResults" style="display: none;">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>Query Results</h2>
+                        </div>
+                        <div class="card-body">
+                            <div id="queryResultsContent"></div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>Data Visualization</h2>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="chartCanvas"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            SignalK Usage Plugin
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="js/ws.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

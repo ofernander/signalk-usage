@@ -1,7 +1,8 @@
 const schema = require('./lib/schema');
-const InfluxClient = require('./lib/influx-client');
-const UsageCoordinator = require('./lib/usage-coordinator');
+const InfluxClient = require('./lib/influxClient');
+const UsageCoordinator = require('./lib/usageCoordinator');
 const Publisher = require('./lib/publisher');
+const routes = require('./lib/routes');
 
 module.exports = function (app) {
   let plugin = {
@@ -120,29 +121,9 @@ module.exports = function (app) {
     }
   };
 
-  // API endpoint to get usage data
+  // Register routes
   plugin.registerWithRouter = function (router) {
-    router.get('/usage', (req, res) => {
-      try {
-        const data = plugin.usageCoordinator.getUsageData();
-        res.json(data);
-      } catch (err) {
-        res.status(500).json({ error: err.message });
-      }
-    });
-
-    router.get('/usage/:path', (req, res) => {
-      try {
-        const data = plugin.usageCoordinator.getUsageForPath(req.params.path);
-        if (!data) {
-          res.status(404).json({ error: 'Path not found' });
-        } else {
-          res.json(data);
-        }
-      } catch (err) {
-        res.status(500).json({ error: err.message });
-      }
-    });
+    routes(router, app, plugin);
   };
 
   return plugin;
