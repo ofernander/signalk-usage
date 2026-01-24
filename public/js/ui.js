@@ -345,11 +345,29 @@ const UI = {
             }
         }
         
-        // Show volume change for tankage items (calculate from first to last)
-        if (results.type === 'tankage' && data.length >= 2) {
-            const firstValue = data[0].value;
-            const lastValue = data[data.length - 1].value;
-            const netChange = lastValue - firstValue;
+        // Show volume totals for tankage items (from backend calculation)
+        if (results.tankage) {
+            const consumed = results.tankage.consumed || 0;
+            const added = results.tankage.added || 0;
+            const netChange = added - consumed;
+            
+            if (consumed > 0) {
+                summaryHtml += `
+                    <div class="summary-item">
+                        <div class="summary-label">Total Consumed</div>
+                        <div class="summary-value negative">${this.formatVolume(consumed, app.unitPreference)}</div>
+                    </div>
+                `;
+            }
+            
+            if (added > 0) {
+                summaryHtml += `
+                    <div class="summary-item">
+                        <div class="summary-label">Total Added</div>
+                        <div class="summary-value positive">${this.formatVolume(added, app.unitPreference)}</div>
+                    </div>
+                `;
+            }
             
             summaryHtml += `
                 <div class="summary-item">
@@ -357,22 +375,6 @@ const UI = {
                     <div class="summary-value ${netChange < 0 ? 'negative' : 'positive'}">${this.formatVolume(netChange, app.unitPreference)}</div>
                 </div>
             `;
-            
-            if (netChange < 0) {
-                summaryHtml += `
-                    <div class="summary-item">
-                        <div class="summary-label">Total Consumed</div>
-                        <div class="summary-value negative">${this.formatVolume(Math.abs(netChange), app.unitPreference)}</div>
-                    </div>
-                `;
-            } else if (netChange > 0) {
-                summaryHtml += `
-                    <div class="summary-item">
-                        <div class="summary-label">Total Added</div>
-                        <div class="summary-value positive">${this.formatVolume(netChange, app.unitPreference)}</div>
-                    </div>
-                `;
-            }
         }
 
         summaryHtml += `</div>`;

@@ -109,6 +109,9 @@ module.exports = function(router, app, plugin) {
             dataPoints,
             itemConfig
           );
+        } else {
+          // Calculate tankage totals using tankageEngine
+          result.tankage = plugin.usageCoordinator.tankageEngine.calculateTankageFromData(dataPoints);
         }
 
         res.json(result);

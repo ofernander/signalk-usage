@@ -170,23 +170,38 @@ TankageEngine.prototype.calculateUsageForPeriod = async function(item, period) {
       };
     }
 
-    // Simple net change approach: first reading vs last reading
-    // No summing between points, no threshold needed
-    const netChange = last.value - first.value;
+    // Time-based filtering approach: track ups/downs but ignore rapid changes (< x min)
+    // This filters sensor noise while catching real consumption and refills
+    const MIN_TIME_DIFF_MS = 2 * 60 * 1000; 
     
-    this.app.debug(`TankageEngine: ${path} - Start: ${first.value.toFixed(4)} m³, End: ${last.value.toFixed(4)} m³, Net Change: ${netChange.toFixed(4)} m³ (${(netChange / 0.00378541).toFixed(2)} gal)`);
-    
-    // If net is negative: consumed (tank went down)
-    // If net is positive: added (tank went up)
     let totalConsumed = 0;
     let totalAdded = 0;
+    let lastTrackedPoint = dataPoints[0];
     
-    if (netChange < 0) {
-      totalConsumed = Math.abs(netChange);
-    } else if (netChange > 0) {
-      totalAdded = netChange;
+    for (let i = 1; i < dataPoints.length; i++) {
+      const prev = lastTrackedPoint;
+      const curr = dataPoints[i];
+      const timeDiffMs = curr.timestamp - prev.timestamp;
+      
+      // Only process changes that are at least 5 minutes apart
+      if (timeDiffMs >= MIN_TIME_DIFF_MS) {
+        const change = curr.value - prev.value;
+        
+        if (change > 0) {
+          // Tank level increased - added
+          totalAdded += change;
+        } else if (change < 0) {
+          // Tank level decreased - consumed
+          totalConsumed += Math.abs(change);
+        }
+        
+        // Update last tracked point
+        lastTrackedPoint = curr;
+      }
+
     }
-    // If netChange === 0, both stay 0
+    
+    this.app.debug(`TankageEngine: ${path} - Added: ${totalAdded.toFixed(4)} m³ (${(totalAdded / 0.00378541).toFixed(2)} gal), Consumed: ${totalConsumed.toFixed(4)} m³ (${(totalConsumed / 0.00378541).toFixed(2)} gal) from ${dataPoints.length} points`);
     
     usage.consumed = totalConsumed;
     usage.added = totalAdded;
@@ -236,6 +251,45 @@ TankageEngine.prototype.getUnit = function(item) {
 
 TankageEngine.prototype.stop = function() {
   this.cache.clear();
+};
+
+// Calculate tankage totals from raw data points (for custom queries)
+// Uses same 5-minute time-based filtering as regular calculations
+TankageEngine.prototype.calculateTankageFromData = function(dataPoints) {
+  if (!dataPoints || dataPoints.length < 2) {
+    return { consumed: 0, added: 0 };
+  }
+
+  // Time-based filtering: ignore changes < x minutes apart
+  const MIN_TIME_DIFF_MS = 2 * 60 * 1000;
+  
+  let totalConsumed = 0;
+  let totalAdded = 0;
+  let lastTrackedPoint = dataPoints[0];
+  
+  for (let i = 1; i < dataPoints.length; i++) {
+    const prev = lastTrackedPoint;
+    const curr = dataPoints[i];
+    const timeDiffMs = curr.timestamp - prev.timestamp;
+    
+    // Only process changes that are at least 5 minutes apart
+    if (timeDiffMs >= MIN_TIME_DIFF_MS) {
+      const change = curr.value - prev.value;
+      
+      if (change > 0) {
+        totalAdded += change;
+      } else if (change < 0) {
+        totalConsumed += Math.abs(change);
+      }
+      
+      lastTrackedPoint = curr;
+    }
+  }
+  
+  return {
+    consumed: totalConsumed,
+    added: totalAdded
+  };
 };
 
 module.exports = TankageEngine;

@@ -57,10 +57,10 @@ module.exports = {
             title: 'Time Periods',
             format: 'table',
             default: [
-              { range: '1h', aggregation: '1m' },
-              { range: '24h', aggregation: '15m' },
-              { range: '7d', aggregation: '1h' },
-              { range: '30d', aggregation: '4h' }
+              { range: '1h', aggregation: '30s' },
+              { range: '24h', aggregation: '5m' },
+              { range: '7d', aggregation: '10m' },
+              { range: '30d', aggregation: '15m' }
             ],
             items: {
               type: 'object',
@@ -114,10 +114,10 @@ module.exports = {
             title: 'Time Periods',
             format: 'table',
             default: [
-              { range: '1h', aggregation: '1m' },
-              { range: '24h', aggregation: '15m' },
-              { range: '7d', aggregation: '1h' },
-              { range: '30d', aggregation: '4h' }
+              { range: '1h', aggregation: '30s' },
+              { range: '24h', aggregation: '5m' },
+              { range: '7d', aggregation: '10m' },
+              { range: '30d', aggregation: '15m' }
             ],
             items: {
               type: 'object',
