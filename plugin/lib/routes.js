@@ -111,7 +111,8 @@ module.exports = function(router, app, plugin) {
           );
         } else {
           // Calculate tankage totals using tankageEngine
-          result.tankage = plugin.usageCoordinator.tankageEngine.calculateTankageFromData(dataPoints);
+          const isLargeTank = itemConfig ? itemConfig.largeTank : false;
+          result.tankage = plugin.usageCoordinator.tankageEngine.calculateTankageFromData(dataPoints, isLargeTank);
         }
 
         res.json(result);

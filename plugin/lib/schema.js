@@ -52,13 +52,18 @@ module.exports = {
             title: 'Display Name',
             description: 'Optional friendly name for this tank'
           },
+          largeTank: {
+            type: 'boolean',
+            title: 'Large Tank (≥10 gallons)',
+            default: false,
+          },
           periods: {
             type: 'array',
             title: 'Time Periods',
             format: 'table',
             default: [
               { range: '1h', aggregation: '30s' },
-              { range: '24h', aggregation: '5m' },
+              { range: '24h', aggregation: '3m' },
               { range: '7d', aggregation: '10m' },
               { range: '30d', aggregation: '15m' }
             ],
@@ -70,12 +75,12 @@ module.exports = {
                 range: {
                   type: 'string',
                   title: 'Range',
-                  description: 'Time range (e.g., 30s, 1h, 24h, 7d, 30d)'
+                  description: 'Time range (e.g., 1h, 24h, 7d, 30d)'
                 },
                 aggregation: {
                   type: 'string',
                   title: 'Aggregation',
-                  description: 'Data aggregation window (e.g., 5s, 1m, 15m, 1h)'
+                  description: 'Data aggregation window (e.g., 1m, 15m, 1h)'
                 }
               }
             }
@@ -115,7 +120,7 @@ module.exports = {
             format: 'table',
             default: [
               { range: '1h', aggregation: '30s' },
-              { range: '24h', aggregation: '5m' },
+              { range: '24h', aggregation: '3m' },
               { range: '7d', aggregation: '10m' },
               { range: '30d', aggregation: '15m' }
             ],
@@ -127,12 +132,12 @@ module.exports = {
                 range: {
                   type: 'string',
                   title: 'Range',
-                  description: 'Time range (e.g., 30m, 1h, 24h, 7d, 30d)'
+                  description: 'Time range (e.g., 1h, 24h, 7d, 30d)'
                 },
                 aggregation: {
                   type: 'string',
                   title: 'Aggregation',
-                  description: 'Data aggregation window (e.g., 30s, 1m, 15m, 1h)'
+                  description: 'Data aggregation window (e.g., 1m, 15m, 1h)'
                 }
               }
             }

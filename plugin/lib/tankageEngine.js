@@ -1,8 +1,25 @@
+/**
+ * TankageEngine - Calculates tank usage (consumption and additions)
+ * 
+ * Filtering approach:
+ * - Time filter: Only process changes >= 2 minutes apart (filters rapid sensor noise)
+ * - Addition requirements: 
+ *   - Small tanks: >= 1 gallon increase over >= 5 minutes
+ *   - Large tanks: >= 5 gallon increase over >= 5 minutes
+ * - Consumption: No quantity threshold, just time filter
+ */
+
+const MIN_TIME_BETWEEN_POINTS_MS = 2 * 60 * 1000;
+const ADDITION_MIN_DURATION_MS = 5 * 60 * 1000;
+const SMALL_TANK_ADDITION_GAL = 1.0;
+const LARGE_TANK_ADDITION_GAL = 5.0;
+const M3_TO_GAL = 264.172;
+const GAL_TO_M3 = 0.00378541;
+
 function TankageEngine(app, influxClient, options) {
   this.app = app;
   this.influxClient = influxClient;
   this.options = options;
-  
   this.cache = new Map();
   this.cacheEnabled = options.reporting?.cacheResults !== false;
 }
@@ -22,7 +39,6 @@ TankageEngine.prototype.calculateForItem = async function(item) {
   
   this.app.debug(`TankageEngine: Calculating usage for ${path}`);
   
-  // Get periods from item config (fallback to defaults if not specified)
   const periods = item.periods || [
     { range: '24h', aggregation: '15m' },
     { range: '7d', aggregation: '1h' }
@@ -51,35 +67,165 @@ TankageEngine.prototype.calculateForItem = async function(item) {
 
   if (this.cacheEnabled) {
     this.cache.set(path, {
-      data: itemData,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      data: itemData
     });
   }
-
-  return itemData;
 };
 
-TankageEngine.prototype.parseAggregationWindow = function(aggregation) {
-  // Parse aggregation string like "30m", "1h", "1d" to minutes
-  const match = aggregation.match(/^(\d+)([smhd])$/);
-  if (!match) return 60; // Default to 60 minutes if can't parse
+TankageEngine.prototype.calculateUsageForPeriod = async function(item, period) {
+  const { path } = item;
+  const { range, aggregation } = period;
   
-  const value = parseInt(match[1]);
-  const unit = match[2];
+  this.app.debug(`TankageEngine: Calculating ${range} for ${path} (aggregation: ${aggregation || 'auto'})`);
   
-  switch (unit) {
-    case 's': return value / 60;
-    case 'm': return value;
-    case 'h': return value * 60;
-    case 'd': return value * 24 * 60;
-    default: return 60;
+  const rangeHours = this.parseTimeRange(range);
+  
+  let uniquePeriods, expectedPeriods, periodType;
+  if (rangeHours >= 24) {
+    const days = Math.ceil(rangeHours / 24);
+    periodType = 'days';
+    uniquePeriods = days;
+    expectedPeriods = Math.max(1, Math.floor(days * 0.7));
+  } else {
+    periodType = 'hours';
+    uniquePeriods = Math.ceil(rangeHours);
+    expectedPeriods = Math.max(1, Math.floor(rangeHours * 0.7));
   }
+  
+  const aggregationWindow = aggregation || this.getAutoAggregation(rangeHours);
+  const rangeParam = `-${range}`;
+  
+  let dataPoints;
+  try {
+    dataPoints = await this.influxClient.queryPath(
+      path,
+      rangeParam,
+      aggregationWindow
+    );
+  } catch (err) {
+    this.app.debug(`TankageEngine: InfluxDB query failed for ${path}: ${err.message}`);
+    return {
+      insufficientData: true,
+      reason: 'Database query failed'
+    };
+  }
+  
+  if (!dataPoints || dataPoints.length < 2) {
+    return {
+      insufficientData: true,
+      reason: 'Not enough data points'
+    };
+  }
+  
+  const firstTime = new Date(dataPoints[0].timestamp);
+  const lastTime = new Date(dataPoints[dataPoints.length - 1].timestamp);
+  
+  const coveredHours = (lastTime - firstTime) / (1000 * 60 * 60);
+  const coveragePercent = (coveredHours / rangeHours) * 100;
+  
+  if (coveragePercent < 70) {
+    return {
+      insufficientData: true,
+      reason: `Only ${coveragePercent.toFixed(0)}% coverage (need 70%)`
+    };
+  }
+  
+  const usage = this.processDataPoints(dataPoints, item);
+  
+  return usage;
+};
+
+TankageEngine.prototype.processDataPoints = function(dataPoints, item) {
+  const { path } = item;
+  
+  const isLargeTank = item.largeTank || false;
+  const additionThresholdGal = isLargeTank ? LARGE_TANK_ADDITION_GAL : SMALL_TANK_ADDITION_GAL;
+  const additionThresholdM3 = additionThresholdGal * GAL_TO_M3;
+  
+  this.app.debug(`TankageEngine: ${path} - Processing ${dataPoints.length} points, Tank type: ${isLargeTank ? 'large' : 'small'} (${additionThresholdGal} gal threshold)`);
+  
+  let totalConsumed = 0;
+  let totalAdded = 0;
+  let lastTrackedPoint = dataPoints[0];
+  
+  for (let i = 1; i < dataPoints.length; i++) {
+    const prevPoint = lastTrackedPoint;
+    const currPoint = dataPoints[i];
+    const timeDiffMs = currPoint.timestamp - prevPoint.timestamp;
+    
+    if (timeDiffMs < MIN_TIME_BETWEEN_POINTS_MS) {
+      continue;
+    }
+    
+    const changeM3 = currPoint.value - prevPoint.value;
+    
+    if (changeM3 > 0) {
+      const meetsQuantity = changeM3 >= additionThresholdM3;
+      const meetsDuration = timeDiffMs >= ADDITION_MIN_DURATION_MS;
+      
+      if (meetsQuantity && meetsDuration) {
+        totalAdded += changeM3;
+      }
+      
+    } else if (changeM3 < 0) {
+      totalConsumed += Math.abs(changeM3);
+    }
+    
+    lastTrackedPoint = currPoint;
+  }
+  
+  this.app.debug(`TankageEngine: ${path} - Consumed: ${(totalConsumed * M3_TO_GAL).toFixed(2)} gal, Added: ${(totalAdded * M3_TO_GAL).toFixed(2)} gal`);
+  
+  return {
+    consumed: totalConsumed,
+    added: totalAdded
+  };
+};
+
+TankageEngine.prototype.calculateTankageFromData = function(dataPoints, isLargeTank) {
+  if (!dataPoints || dataPoints.length < 2) {
+    return { consumed: 0, added: 0 };
+  }
+
+  const additionThresholdGal = isLargeTank ? LARGE_TANK_ADDITION_GAL : SMALL_TANK_ADDITION_GAL;
+  const additionThresholdM3 = additionThresholdGal * GAL_TO_M3;
+  
+  let totalConsumed = 0;
+  let totalAdded = 0;
+  let lastTrackedPoint = dataPoints[0];
+  
+  for (let i = 1; i < dataPoints.length; i++) {
+    const prevPoint = lastTrackedPoint;
+    const currPoint = dataPoints[i];
+    const timeDiffMs = currPoint.timestamp - prevPoint.timestamp;
+    
+    if (timeDiffMs < MIN_TIME_BETWEEN_POINTS_MS) {
+      continue;
+    }
+    
+    const changeM3 = currPoint.value - prevPoint.value;
+    
+    if (changeM3 > 0) {
+      if (changeM3 >= additionThresholdM3 && timeDiffMs >= ADDITION_MIN_DURATION_MS) {
+        totalAdded += changeM3;
+      }
+    } else if (changeM3 < 0) {
+      totalConsumed += Math.abs(changeM3);
+    }
+    
+    lastTrackedPoint = currPoint;
+  }
+  
+  return {
+    consumed: totalConsumed,
+    added: totalAdded
+  };
 };
 
 TankageEngine.prototype.parseTimeRange = function(range) {
-  // Parse range string like "1h", "7d", "365d" to hours
   const match = range.match(/^(\d+)([smhd])$/);
-  if (!match) return 1; // Default to 1 hour if can't parse
+  if (!match) return 1;
   
   const value = parseInt(match[1]);
   const unit = match[2];
@@ -93,143 +239,22 @@ TankageEngine.prototype.parseTimeRange = function(range) {
   }
 };
 
-TankageEngine.prototype.calculateUsageForPeriod = async function(item, period) {
-  const { path } = item;
-  const { range, aggregation } = period;
-  const rangeParam = `-${range}`;
-  
-  this.app.debug(`TankageEngine: Calculating ${range} for ${path} (aggregation: ${aggregation || 'auto'})`);
-  
-  const { first, last } = await this.influxClient.getFirstAndLast(path, rangeParam);
-  
-  if (!first || !last) {
-    return {
-      insufficientData: true,
-      reason: 'No data available for this period'
-    };
-  }
-
-  const delta = last.value - first.value;
-  const timeDiffHours = (last.timestamp - first.timestamp) / (1000 * 60 * 60);
-  
-  const usage = {
-    period: range,
-    startTime: first.timestamp,
-    endTime: last.timestamp,
-    startValue: first.value,
-    endValue: last.value,
-    delta: delta
-  };
-
-  // Use aggregated data - naturally filters boat motion via time-windowed averaging
-  try {
-    this.app.debug(`TankageEngine: Fetching aggregated data for ${path}`);
-    const dataPoints = await this.influxClient.queryPath(path, rangeParam, aggregation);
-    
-    if (!dataPoints || dataPoints.length < 2) {
-      this.app.debug(`TankageEngine: Insufficient data points for ${path}: ${dataPoints ? dataPoints.length : 0}`);
-      return {
-        insufficientData: true,
-        reason: 'Insufficient data points'
-      };
-    }
-
-    // Check coverage based on unique days (or hours for sub-day periods)
-    const rangeHours = this.parseTimeRange(range);
-    
-    let uniquePeriods, expectedPeriods, periodType;
-    
-    if (rangeHours >= 24) {
-      // For periods >= 1 day, check daily coverage
-      const uniqueDays = new Set(dataPoints.map(p => {
-        const date = new Date(p.timestamp);
-        return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
-      }));
-      uniquePeriods = uniqueDays.size;
-      expectedPeriods = Math.ceil(rangeHours / 24);
-      periodType = 'days';
-    } else {
-      // For periods < 1 day, check hourly coverage
-      const uniqueHours = new Set(dataPoints.map(p => {
-        const date = new Date(p.timestamp);
-        return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}-${String(date.getUTCHours()).padStart(2, '0')}`;
-      }));
-      uniquePeriods = uniqueHours.size;
-      expectedPeriods = Math.ceil(rangeHours);
-      periodType = 'hours';
-    }
-    
-    this.app.debug(`TankageEngine: Coverage for ${path} (${range}): ${uniquePeriods}/${expectedPeriods} ${periodType}`);
-
-    // Check if we have data for every day (or hour)
-    if (uniquePeriods < expectedPeriods) {
-      this.app.debug(`TankageEngine: Insufficient coverage for ${path} (${range}) - missing ${expectedPeriods - uniquePeriods} ${periodType}`);
-      return {
-        insufficientData: true,
-        reason: `Insufficient coverage (${uniquePeriods}/${expectedPeriods} ${periodType})`
-      };
-    }
-
-    // Time-based filtering approach: track ups/downs but ignore rapid changes (< x min)
-    // This filters sensor noise while catching real consumption and refills
-    const MIN_TIME_DIFF_MS = 2 * 60 * 1000; 
-    
-    let totalConsumed = 0;
-    let totalAdded = 0;
-    let lastTrackedPoint = dataPoints[0];
-    
-    for (let i = 1; i < dataPoints.length; i++) {
-      const prev = lastTrackedPoint;
-      const curr = dataPoints[i];
-      const timeDiffMs = curr.timestamp - prev.timestamp;
-      
-      // Only process changes that are at least 5 minutes apart
-      if (timeDiffMs >= MIN_TIME_DIFF_MS) {
-        const change = curr.value - prev.value;
-        
-        if (change > 0) {
-          // Tank level increased - added
-          totalAdded += change;
-        } else if (change < 0) {
-          // Tank level decreased - consumed
-          totalConsumed += Math.abs(change);
-        }
-        
-        // Update last tracked point
-        lastTrackedPoint = curr;
-      }
-
-    }
-    
-    this.app.debug(`TankageEngine: ${path} - Added: ${totalAdded.toFixed(4)} m³ (${(totalAdded / 0.00378541).toFixed(2)} gal), Consumed: ${totalConsumed.toFixed(4)} m³ (${(totalConsumed / 0.00378541).toFixed(2)} gal) from ${dataPoints.length} points`);
-    
-    usage.consumed = totalConsumed;
-    usage.added = totalAdded;
-  } catch (err) {
-    this.app.debug(`TankageEngine: Error getting aggregated data for ${path}: ${err.message}`);
-    return {
-      insufficientData: true,
-      reason: `Error: ${err.message}`
-    };
-  }
-
-  // Calculate rates based on actual consumption and addition
-  if (timeDiffHours > 0) {
-    usage.consumptionRate = usage.consumed / timeDiffHours;
-    usage.additionRate = usage.added / timeDiffHours;
-  }
-
-  return usage;
+TankageEngine.prototype.getAutoAggregation = function(rangeHours) {
+  if (rangeHours <= 1) return '1m';
+  if (rangeHours <= 6) return '5m';
+  if (rangeHours <= 24) return '15m';
+  if (rangeHours <= 168) return '1h';
+  return '4h';
 };
 
 TankageEngine.prototype.getUsageData = function() {
-  const data = {};
+  const items = {};
   
   this.cache.forEach((cached, path) => {
-    data[path] = cached.data;
+    items[path] = cached.data;
   });
-
-  return data;
+  
+  return items;
 };
 
 TankageEngine.prototype.getUsageForPath = function(path) {
@@ -242,7 +267,6 @@ TankageEngine.prototype.getUnit = function(item) {
   
   const path = item.path.toLowerCase();
   
-  // Tank measurements
   if (path.includes('currentlevel')) return 'ratio';
   if (path.startsWith('tanks.') && (path.includes('remaining') || path.includes('currentvolume'))) return 'm3';
   
@@ -251,45 +275,6 @@ TankageEngine.prototype.getUnit = function(item) {
 
 TankageEngine.prototype.stop = function() {
   this.cache.clear();
-};
-
-// Calculate tankage totals from raw data points (for custom queries)
-// Uses same 5-minute time-based filtering as regular calculations
-TankageEngine.prototype.calculateTankageFromData = function(dataPoints) {
-  if (!dataPoints || dataPoints.length < 2) {
-    return { consumed: 0, added: 0 };
-  }
-
-  // Time-based filtering: ignore changes < x minutes apart
-  const MIN_TIME_DIFF_MS = 2 * 60 * 1000;
-  
-  let totalConsumed = 0;
-  let totalAdded = 0;
-  let lastTrackedPoint = dataPoints[0];
-  
-  for (let i = 1; i < dataPoints.length; i++) {
-    const prev = lastTrackedPoint;
-    const curr = dataPoints[i];
-    const timeDiffMs = curr.timestamp - prev.timestamp;
-    
-    // Only process changes that are at least 5 minutes apart
-    if (timeDiffMs >= MIN_TIME_DIFF_MS) {
-      const change = curr.value - prev.value;
-      
-      if (change > 0) {
-        totalAdded += change;
-      } else if (change < 0) {
-        totalConsumed += Math.abs(change);
-      }
-      
-      lastTrackedPoint = curr;
-    }
-  }
-  
-  return {
-    consumed: totalConsumed,
-    added: totalAdded
-  };
 };
 
 module.exports = TankageEngine;

@@ -273,7 +273,7 @@ const UI = {
         return html;
     },
 
-    // Render tankage period - simplified to consumption only
+    // Render tankage period - show consumed, added, and net change
     renderTankagePeriod(data, unitPref = 'metric') {
         const consumed = data.consumed || 0;
         const added = data.added || 0;
@@ -283,6 +283,14 @@ const UI = {
             <div class="stat-row">
                 <span class="stat-label">Consumed:</span>
                 <span class="stat-value negative">${this.formatVolume(consumed, unitPref)}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Added:</span>
+                <span class="stat-value positive">${this.formatVolume(added, unitPref)}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Change:</span>
+                <span class="stat-value ${change < 0 ? 'negative' : 'positive'}">${this.formatVolume(change, unitPref)}</span>
             </div>
         `;
     },
