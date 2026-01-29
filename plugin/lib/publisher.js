@@ -20,9 +20,15 @@ Publisher.prototype.start = function() {
 };
 
 Publisher.prototype.round = function(value, decimalPlaces = 1) {
+  // Ensure we always have a valid number
+  const num = Number(value);
+  if (!isFinite(num)) {
+    return 0; // Return 0 for null, undefined, NaN, Infinity
+  }
+  
   // Round to specified decimal places (default 1)
   const multiplier = Math.pow(10, decimalPlaces);
-  return Math.round(value * multiplier) / multiplier;
+  return Math.round(num * multiplier) / multiplier;
 };
 
 Publisher.prototype.publish = function() {
