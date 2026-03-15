@@ -32,6 +32,7 @@ InfluxClient.prototype.queryPath = async function(path, range, aggregation) {
       |> filter(fn: (r) => r._measurement == "${path}")
       |> filter(fn: (r) => r._field == "value")
       |> filter(fn: (r) => r.self == "true")
+      |> toFloat()
       |> aggregateWindow(every: ${window}, fn: mean, createEmpty: false)
       |> sort(columns: ["_time"])
   `;
@@ -107,6 +108,7 @@ InfluxClient.prototype.queryPathCustomRange = async function(path, start, end, a
       |> filter(fn: (r) => r._measurement == "${path}")
       |> filter(fn: (r) => r._field == "value")
       |> filter(fn: (r) => r.self == "true")
+      |> toFloat()
       |> aggregateWindow(every: ${aggregation}, fn: mean, createEmpty: false)
       |> sort(columns: ["_time"])
   `;
@@ -157,6 +159,7 @@ InfluxClient.prototype.getFirstAndLast = async function(path, range) {
       |> filter(fn: (r) => r._measurement == "${path}")
       |> filter(fn: (r) => r._field == "value")
       |> filter(fn: (r) => r.self == "true")
+      |> toFloat()
   `;
   
   this.app.debug(`Executing query for ${path}:`);

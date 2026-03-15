@@ -1,6 +1,6 @@
 {
   "name": "signalk-usage",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Track electrical and tank usage",
   "main": "plugin/index.js",
   "keywords": [

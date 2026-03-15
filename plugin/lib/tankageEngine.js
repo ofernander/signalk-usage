@@ -2,10 +2,10 @@
  * TankageEngine - Calculates tank usage (consumption and additions)
  * 
  * Filtering approach:
- * - Time filter: Only process changes >= X minutes apart (filters rapid sensor noise)
+ * - Time filter: Only process changes >= 2 minutes apart (filters rapid sensor noise)
  * - Addition requirements: 
- *   - Small tanks: >= X gallon increase over >= X minutes
- *   - Large tanks: >= X gallon increase over >= X minutes
+ *   - Small tanks: >= 1 gallon increase over >= 5 minutes
+ *   - Large tanks: >= 5 gallon increase over >= 5 minutes
  * - Consumption: No quantity threshold, just time filter
  */
 
@@ -14,15 +14,15 @@ const M3_TO_GAL = 264.172;
 const GAL_TO_M3 = 0.00378541;
 
 // Consumption calculation - different smoothing for short vs long periods
-const SHORT_PERIOD_THRESHOLD_MS = 24 * 60 * 60 * 1000; // X hours
-const SHORT_PERIOD_SMOOTHING_PERCENT = 0.25; // X% for periods ≤ X hours
-const LONG_PERIOD_SMOOTHING_PERCENT = 0.06; // X% for periods > X hours
+const SHORT_PERIOD_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
+const SHORT_PERIOD_SMOOTHING_PERCENT = 0.40; // 40% for periods ≤ 24 hours
+const LONG_PERIOD_SMOOTHING_PERCENT = 0.35; // 35% for periods > 24 hours
 
 // Addition calculation - light smoothing to preserve refills
-const ADDITION_SMOOTHING_MS = 1 * 60 * 60 * 1000; // X hour (fixed)
+const ADDITION_SMOOTHING_MS = 1 * 60 * 60 * 1000; // 1 hour (fixed)
 const SMALL_TANK_ADDITION_GAL = 1.0;
 const LARGE_TANK_ADDITION_GAL = 5.0;
-const ADDITION_MIN_DURATION_MS = 5 * 60 * 1000; // X minutes
+const ADDITION_MIN_DURATION_MS = 2 * 60 * 1000; // 5 minutes
 
 function TankageEngine(app, influxClient, options) {
   this.app = app;
@@ -161,7 +161,7 @@ TankageEngine.prototype.processDataPoints = function(dataPoints, item) {
   
   this.app.debug(`TankageEngine: ${path} - Processing ${dataPoints.length} points, Tank type: ${isLargeTank ? 'large' : 'small'}, Consumption smoothing: ${(consumptionSmoothingMs / 3600000).toFixed(1)} hours (${(smoothingPercent * 100).toFixed(0)}% of ${(dataRangeMs / 3600000).toFixed(1)} hour range)`);
   
-  // CONSUMPTION CALCULATION - Dual smoothing (X% for ≤Xh, X% for >Xh) to filter dips
+  // CONSUMPTION CALCULATION - Dual smoothing (40% for ≤24h, 35% for >24h) to filter dips
   const consumptionSmoothed = [];
   for (let i = 0; i < dataPoints.length; i++) {
     const currentPoint = dataPoints[i];
@@ -204,7 +204,7 @@ TankageEngine.prototype.processDataPoints = function(dataPoints, item) {
     lastConsumptionPoint = currPoint;
   }
   
-  // ADDITION CALCULATION - Light smoothing (X hour) to preserve refills
+  // ADDITION CALCULATION - Light smoothing (1 hour) to preserve refills
   const additionSmoothed = [];
   for (let i = 0; i < dataPoints.length; i++) {
     const currentPoint = dataPoints[i];
@@ -252,7 +252,7 @@ TankageEngine.prototype.processDataPoints = function(dataPoints, item) {
     lastAdditionPoint = currPoint;
   }
   
-  this.app.debug(`TankageEngine: ${path} - Consumed: ${(totalConsumed * M3_TO_GAL).toFixed(2)} gal (Xhr smooth), Added: ${(totalAdded * M3_TO_GAL).toFixed(2)} gal (Xhr smooth)`);
+  this.app.debug(`TankageEngine: ${path} - Consumed: ${(totalConsumed * M3_TO_GAL).toFixed(2)} gal (8hr smooth), Added: ${(totalAdded * M3_TO_GAL).toFixed(2)} gal (1hr smooth)`);
   
   return {
     consumed: totalConsumed,
@@ -275,7 +275,7 @@ TankageEngine.prototype.calculateTankageFromData = function(dataPoints, isLargeT
     : LONG_PERIOD_SMOOTHING_PERCENT;
   const consumptionSmoothingMs = dataRangeMs * smoothingPercent;
   
-  // CONSUMPTION - Dual smoothing (X% for ≤Xh, X% for >Xh)
+  // CONSUMPTION - Dual smoothing (40% for ≤24h, 35% for >24h)
   const consumptionSmoothed = [];
   for (let i = 0; i < dataPoints.length; i++) {
     const currentPoint = dataPoints[i];
@@ -316,7 +316,7 @@ TankageEngine.prototype.calculateTankageFromData = function(dataPoints, isLargeT
     lastConsumptionPoint = currPoint;
   }
   
-  // ADDITION - Light smoothing (X hour)
+  // ADDITION - Light smoothing (1 hour)
   const additionSmoothed = [];
   for (let i = 0; i < dataPoints.length; i++) {
     const currentPoint = dataPoints[i];

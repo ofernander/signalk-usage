@@ -63,7 +63,7 @@ module.exports = {
             format: 'table',
             default: [
               { range: '1h', aggregation: '30s' },
-              { range: '24h', aggregation: '3m' },
+              { range: '24h', aggregation: '5m' },
               { range: '7d', aggregation: '10m' },
               { range: '30d', aggregation: '15m' }
             ],
