@@ -269,7 +269,7 @@ class UsageApp {
         const isProducer = !isBidirectional && directionality.includes('producer');
         const isBattery = path.toLowerCase().includes('batter');
         const conv = this.unitPreference === 'imperial' ? 264.172 : 1000;
-        const unitLabel = isPower ? 'Wh' : (this.unitPreference === 'imperial' ? 'gal' : 'L');
+        const unitLabel = isPower ? 'W' : (this.unitPreference === 'imperial' ? 'gal' : 'L');
 
         const periodData = itemData.periods[period];
         if (!periodData || periodData.insufficientData) {
