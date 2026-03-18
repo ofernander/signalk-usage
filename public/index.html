@@ -29,26 +29,31 @@
         <div class="main-content">
             <!-- Dashboard Tab -->
             <div id="dashboard" class="tab-content active">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Electrical</h2>
-                        <div class="card-subtitle">Energy Consumption & Generation</div>
-                    </div>
-                    <div class="card-body">
-                        <div id="powerStats" class="stats-grid">
-                            <div class="loading">Waiting for data...</div>
+                <div class="dashboard-columns">
+                    <div class="dashboard-column">
+                        <div class="card">
+                            <div class="card-header">
+                                <h2>Electrical</h2>
+                                <div class="card-subtitle">Energy Consumption & Generation</div>
+                            </div>
+                            <div class="card-body">
+                                <div id="powerStats" class="stats-grid">
+                                    <div class="loading">Waiting for data...</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Tankage</h2>
-                        <div class="card-subtitle">Tankage Consumption & Re-fills</div>
-                    </div>
-                    <div class="card-body">
-                        <div id="tankageStats" class="stats-grid">
-                            <div class="loading">Waiting for data...</div>
+                    <div class="dashboard-column">
+                        <div class="card">
+                            <div class="card-header">
+                                <h2>Tankage</h2>
+                                <div class="card-subtitle">Tankage Consumption & Re-fills</div>
+                            </div>
+                            <div class="card-body">
+                                <div id="tankageStats" class="stats-grid">
+                                    <div class="loading">Waiting for data...</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -149,7 +154,10 @@
 
         <!-- Footer -->
         <div class="footer">
-            SignalK Usage Plugin
+            <a href="https://github.com/ofernander/signalk-usage" target="_blank" rel="noopener" style="display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); text-decoration: none;">
+                <img src="https://github.com/favicon.ico" alt="GitHub" style="width: 14px; height: 14px; opacity: 0.6;">
+                ofernander/signalk-usage
+            </a>
         </div>
     </div>
 

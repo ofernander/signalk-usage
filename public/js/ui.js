@@ -172,60 +172,69 @@ const UI = {
         return 'Bidirectional';
     },
 
-    // Render stat card
+    // Sort period keys shortest -> longest
+    sortPeriods(periods) {
+        const unitMs = { s: 1, m: 60, h: 3600, d: 86400 };
+        return Object.entries(periods).sort(([a], [b]) => {
+            const parse = s => {
+                const m = s.match(/^(\d+)([smhd])$/);
+                return m ? parseInt(m[1]) * unitMs[m[2]] : 0;
+            };
+            return parse(a) - parse(b);
+        });
+    },
+
+    // Render stat card - horizontal layout
     renderStatCard(path, item, isPower, unitPref = 'metric') {
         const directionality = item.directionality || 'bidirectional';
         const badgeClass = this.getDirectionalityClass(directionality);
         const badgeText = this.formatDirectionality(directionality);
-        
-        // Build title: always show path, add display name if different
+        const cardId = 'card-' + path.replace(/\./g, '-');
+
         let title = this.escapeHtml(path);
         if (item.name && item.name !== path) {
-            title = `${this.escapeHtml(path)} <span style="color: var(--text-muted); font-weight: normal;">(${this.escapeHtml(item.name)})</span>`;
-        }
-        
-        let html = `
-            <div class="stat-card">
-                <div class="stat-header">
-                    <div class="stat-title">${title}</div>
-        `;
-        
-        if (isPower) {
-            html += `<div class="stat-badge ${badgeClass}">${badgeText}</div>`;
-        }
-        
-        html += `
-                </div>
-                ${this.renderPeriods(item.periods, isPower, unitPref, directionality, path)}
-            </div>
-        `;
-        
-        return html;
-    },
-
-    // Render periods
-    renderPeriods(periods, isPower, unitPref = 'metric', directionality = 'bidirectional', path = '') {
-        if (!periods) {
-            return '<div class="insufficient-data">No period data available</div>';
+            title = `${this.escapeHtml(path)} <span style="color: var(--text-secondary); font-weight: normal;">(${this.escapeHtml(item.name)})</span>`;
         }
 
-        return Object.entries(periods).map(([range, data]) => {
+        const sortedPeriods = this.sortPeriods(item.periods || {});
+
+        let periodsHtml = sortedPeriods.map(([range, data], idx) => {
+            const isActive = idx === 0;
             if (data.insufficientData) {
                 return `
-                    <div class="period-stats">
+                    <div class="period-block${isActive ? ' active' : ''}" data-period="${range}" data-path="${this.escapeHtml(path)}" data-power="${isPower}">
                         <div class="period-label">${range}</div>
                         <div class="insufficient-data">⚠️ ${data.reason || 'Insufficient data'}</div>
                     </div>
                 `;
             }
-
+            const statsHtml = isPower
+                ? this.renderPowerPeriod(data, directionality, path)
+                : this.renderTankagePeriod(data, unitPref);
             return `
-                <div class="period-stats">
+                <div class="period-block${isActive ? ' active' : ''}" data-period="${range}" data-path="${this.escapeHtml(path)}" data-power="${isPower}">
                     <div class="period-label">${range}</div>
-                    ${isPower ? this.renderPowerPeriod(data, directionality, path) : this.renderTankagePeriod(data, unitPref)}
+                    ${statsHtml}
                 </div>
             `;
         }).join('');
+
+        return `
+            <div class="stat-card" id="${cardId}">
+                <div class="stat-card-header">
+                    <div class="stat-title">${title}</div>
+                    <div class="stat-badge ${isPower ? badgeClass : 'bidirectional'}">${isPower ? badgeText : 'Bidirectional'}</div>
+                </div>
+                <div class="stat-card-body">
+                    <div class="stat-periods">
+                        ${periodsHtml}
+                    </div>
+                    <div class="stat-chart-panel">
+                        <div class="stat-chart-loading">Select a time period to load chart</div>
+                    </div>
+                </div>
+            </div>
+        `;
     },
 
     // Render power period - conditionally show metrics based on directionality

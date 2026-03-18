@@ -22,6 +22,7 @@ class UsageApp {
     }
 
     init() {
+        this.cardCharts = {}; // chart instances keyed by path
         this.setupTabs();
         this.setupEventListeners();
         this.setDefaultDateTimes();
@@ -193,37 +194,226 @@ class UsageApp {
     renderDashboard() {
         this.renderPowerStats(this.currentData.power);
         this.renderTankageStats(this.currentData.tankage);
-        
-        // Update path options for custom query after data is loaded
         this.updatePathOptions();
     }
 
     renderPowerStats(items) {
         const container = document.getElementById('powerStats');
-        
         if (Object.keys(items).length === 0) {
             UI.showEmpty('powerStats', 'No power items configured. Waiting for data...');
             return;
         }
-
         container.innerHTML = Object.entries(items)
-            .sort(([pathA], [pathB]) => pathA.localeCompare(pathB)) // Sort alphabetically by path
+            .sort(([a], [b]) => a.localeCompare(b))
             .map(([path, item]) => UI.renderStatCard(path, item, true, this.unitPreference))
             .join('');
+        Object.keys(items).forEach(path => this.autoLoadDefaultChart(path, true));
+        this.setupPeriodClickHandlers(container);
     }
 
     renderTankageStats(items) {
         const container = document.getElementById('tankageStats');
-        
         if (Object.keys(items).length === 0) {
             UI.showEmpty('tankageStats', 'No tankage items configured. Waiting for data...');
             return;
         }
-
         container.innerHTML = Object.entries(items)
-            .sort(([pathA], [pathB]) => pathA.localeCompare(pathB)) // Sort alphabetically by path
+            .sort(([a], [b]) => a.localeCompare(b))
             .map(([path, item]) => UI.renderStatCard(path, item, false, this.unitPreference))
             .join('');
+        Object.keys(items).forEach(path => this.autoLoadDefaultChart(path, false));
+        this.setupPeriodClickHandlers(container);
+    }
+
+    setupPeriodClickHandlers(container) {
+        container.querySelectorAll('.period-block').forEach(block => {
+            block.addEventListener('click', () => {
+                const path = block.dataset.path;
+                const period = block.dataset.period;
+                const isPower = block.dataset.power === 'true';
+                const cardId = 'card-' + path.replace(/\./g, '-');
+                const card = document.getElementById(cardId);
+                if (!card) return;
+                card.querySelectorAll('.period-block').forEach(b => b.classList.remove('active'));
+                block.classList.add('active');
+                this.loadCardChart(card, path, period, isPower);
+            });
+        });
+    }
+
+    autoLoadDefaultChart(path, isPower) {
+        const cardId = 'card-' + path.replace(/\./g, '-');
+        const card = document.getElementById(cardId);
+        if (!card) return;
+        const firstBlock = card.querySelector('.period-block');
+        if (!firstBlock) return;
+        const period = firstBlock.dataset.period;
+        this.loadCardChart(card, path, period, isPower);
+    }
+
+    async loadCardChart(card, path, period, isPower) {
+        const panel = card.querySelector('.stat-chart-panel');
+        if (this.cardCharts[path]) {
+            this.cardCharts[path].destroy();
+            delete this.cardCharts[path];
+        }
+
+        const itemData = this.currentData[isPower ? 'power' : 'tankage'][path];
+        if (!itemData || !itemData.periods) {
+            panel.innerHTML = '<div class="stat-chart-loading">No data available</div>';
+            return;
+        }
+
+        const directionality = itemData.directionality || 'bidirectional';
+        const isBidirectional = directionality.includes('bidirectional');
+        const isProducer = !isBidirectional && directionality.includes('producer');
+        const isBattery = path.toLowerCase().includes('batter');
+        const conv = this.unitPreference === 'imperial' ? 264.172 : 1000;
+        const unitLabel = isPower ? 'Wh' : (this.unitPreference === 'imperial' ? 'gal' : 'L');
+
+        const periodData = itemData.periods[period];
+        if (!periodData || periodData.insufficientData) {
+            panel.innerHTML = `<div class="stat-chart-loading">${periodData?.reason || 'Insufficient data'}</div>`;
+            return;
+        }
+
+        panel.innerHTML = '<div class="stat-chart-loading">Loading...</div>';
+
+        // Fetch time-series for the selected period
+        const now = new Date();
+        const end = now.toISOString();
+        const start = new Date(now - this.periodToMs(period)).toISOString();
+        const aggregation = this.periodToAggregation(period);
+
+        let rawData;
+        try {
+            const response = await fetch('/plugins/signalk-usage/api/query', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path, start, end, aggregation })
+            });
+            if (!response.ok) throw new Error('Query failed');
+            const results = await response.json();
+            rawData = results.data || [];
+        } catch (err) {
+            panel.innerHTML = `<div class="stat-chart-loading">Error: ${err.message}</div>`;
+            return;
+        }
+
+        if (rawData.length === 0) {
+            rawData = [{ timestamp: new Date().toISOString(), value: 0 }];
+        }
+
+        // Build time labels
+        const periodMs = this.periodToMs(period);
+        const labels = rawData.map(d => {
+            const date = new Date(d.timestamp);
+            if (periodMs <= 86400000) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        });
+
+        let datasets;
+        if (isPower) {
+            const values = rawData.map(d => d.value);
+            if (isProducer) {
+                datasets = [{
+                    label: 'Generated',
+                    data: values.map(v => Math.abs(v)),
+                    backgroundColor: 'rgba(44, 82, 130, 0.7)',
+                    borderColor: '#2c5282', borderWidth: 1
+                }];
+            } else if (isBidirectional) {
+                datasets = [
+                    { label: isBattery ? 'Charged' : 'Generated', data: values.map(v => v > 0 ? v : 0), backgroundColor: 'rgba(44, 82, 130, 0.7)', borderColor: '#2c5282', borderWidth: 1 },
+                    { label: isBattery ? 'Discharged' : 'Consumed', data: values.map(v => v < 0 ? v : 0), backgroundColor: 'rgba(74, 85, 104, 0.7)', borderColor: '#4a5568', borderWidth: 1 }
+                ];
+            } else {
+                datasets = [{
+                    label: 'Consumed',
+                    data: values.map(v => -Math.abs(v)),
+                    backgroundColor: 'rgba(44, 82, 130, 0.7)',
+                    borderColor: '#2c5282', borderWidth: 1
+                }];
+            }
+        } else {
+            // Tankage: compute deltas from raw level data
+            const levels = rawData.map(d => d.value * conv);
+            const deltas = [0];
+            for (let i = 1; i < levels.length; i++) {
+                deltas.push(levels[i] - levels[i - 1]);
+            }
+            datasets = [
+                { label: 'Added', data: deltas.map(v => v > 0 ? v : 0), backgroundColor: 'rgba(44, 82, 130, 0.7)', borderColor: '#2c5282', borderWidth: 1 },
+                { label: 'Consumed', data: deltas.map(v => v < 0 ? v : 0), backgroundColor: 'rgba(74, 85, 104, 0.7)', borderColor: '#4a5568', borderWidth: 1 }
+            ];
+        }
+
+        const allValues = datasets.flatMap(d => d.data);
+        const absMax = Math.max(...allValues.map(v => Math.abs(v))) * 1.2 || 1;
+
+        let yMin, yMax;
+        if (isProducer) {
+            yMin = 0;
+            yMax = absMax;
+        } else if (isPower && !isBidirectional && !isProducer) {
+            yMin = -absMax;
+            yMax = 0;
+        } else {
+            yMin = -absMax;
+            yMax = absMax;
+        }
+
+        panel.innerHTML = '<div class="stat-chart-canvas-wrap"><canvas></canvas></div>';
+        const canvas = panel.querySelector('canvas');
+        const ctx = canvas.getContext('2d');
+
+        this.cardCharts[path] = new Chart(ctx, {
+            type: 'bar',
+            data: { labels, datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: datasets.length > 1, labels: { font: { size: 11 }, boxWidth: 12 } },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => `${ctx.dataset.label}: ${Math.abs(ctx.parsed.y).toFixed(2)} ${unitLabel}`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 8, font: { size: 11 } },
+                        grid: { color: '#e2e8f0' }
+                    },
+                    y: {
+                        min: yMin,
+                        max: yMax,
+                        title: { display: true, text: unitLabel, font: { size: 11 } },
+                        ticks: { font: { size: 11 }, callback: val => Math.abs(val).toFixed(1) },
+                        grid: {
+                            color: ctx => ctx.tick.value === 0 ? '#4a5568' : '#e2e8f0',
+                            lineWidth: ctx => ctx.tick.value === 0 ? 2 : 1
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    periodToMs(period) {
+        const units = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
+        const m = period.match(/^(\d+)([smhd])$/);
+        return m ? parseInt(m[1]) * units[m[2]] : 3600000;
+    }
+
+    periodToAggregation(period) {
+        const ms = this.periodToMs(period);
+        if (ms <= 3600000)   return '1m';
+        if (ms <= 21600000)  return '5m';
+        if (ms <= 86400000)  return '15m';
+        if (ms <= 604800000) return '1h';
+        return '4h';
     }
 
     updatePathOptions() {
