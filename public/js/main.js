@@ -312,25 +312,35 @@ class UsageApp {
             return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
         });
 
+        // Gate: use periodData totals to determine if there is real activity
+        const periodGenerated = periodData.energy?.generatedWh || 0;
+        const periodConsumed = periodData.energy?.consumedWh || 0;
+        const periodAdded = periodData.added || 0;
+        const periodConsumedTank = periodData.consumed || 0;
+        const generatedActive = periodGenerated > 0;
+        const consumedActive = periodConsumed > 0;
+        const addedActive = periodAdded > 0;
+        const consumedActiveTank = periodConsumedTank > 0;
+
         let datasets;
         if (isPower) {
             const values = rawData.map(d => d.value);
             if (isProducer) {
                 datasets = [{
                     label: 'Generated',
-                    data: values.map(v => Math.abs(v)),
+                    data: generatedActive ? values.map(v => Math.abs(v)) : rawData.map(() => 0),
                     backgroundColor: 'rgba(44, 82, 130, 0.7)',
                     borderColor: '#2c5282', borderWidth: 1
                 }];
             } else if (isBidirectional) {
                 datasets = [
-                    { label: isBattery ? 'Charged' : 'Generated', data: values.map(v => v > 0 ? v : 0), backgroundColor: 'rgba(44, 82, 130, 0.7)', borderColor: '#2c5282', borderWidth: 1 },
-                    { label: isBattery ? 'Discharged' : 'Consumed', data: values.map(v => v < 0 ? v : 0), backgroundColor: 'rgba(74, 85, 104, 0.7)', borderColor: '#4a5568', borderWidth: 1 }
+                    { label: isBattery ? 'Charged' : 'Generated', data: generatedActive ? values.map(v => v > 0 ? v : 0) : rawData.map(() => 0), backgroundColor: 'rgba(44, 82, 130, 0.7)', borderColor: '#2c5282', borderWidth: 1 },
+                    { label: isBattery ? 'Discharged' : 'Consumed', data: consumedActive ? values.map(v => v < 0 ? v : 0) : rawData.map(() => 0), backgroundColor: 'rgba(74, 85, 104, 0.7)', borderColor: '#4a5568', borderWidth: 1 }
                 ];
             } else {
                 datasets = [{
                     label: 'Consumed',
-                    data: values.map(v => -Math.abs(v)),
+                    data: consumedActive ? values.map(v => -Math.abs(v)) : rawData.map(() => 0),
                     backgroundColor: 'rgba(44, 82, 130, 0.7)',
                     borderColor: '#2c5282', borderWidth: 1
                 }];
@@ -343,8 +353,8 @@ class UsageApp {
                 deltas.push(levels[i] - levels[i - 1]);
             }
             datasets = [
-                { label: 'Added', data: deltas.map(v => v > 0 ? v : 0), backgroundColor: 'rgba(44, 82, 130, 0.7)', borderColor: '#2c5282', borderWidth: 1 },
-                { label: 'Consumed', data: deltas.map(v => v < 0 ? v : 0), backgroundColor: 'rgba(74, 85, 104, 0.7)', borderColor: '#4a5568', borderWidth: 1 }
+                { label: 'Added', data: addedActive ? deltas.map(v => v > 0 ? v : 0) : rawData.map(() => 0), backgroundColor: 'rgba(44, 82, 130, 0.7)', borderColor: '#2c5282', borderWidth: 1 },
+                { label: 'Consumed', data: consumedActiveTank ? deltas.map(v => v < 0 ? v : 0) : rawData.map(() => 0), backgroundColor: 'rgba(74, 85, 104, 0.7)', borderColor: '#4a5568', borderWidth: 1 }
             ];
         }
 
