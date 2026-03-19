@@ -9,6 +9,8 @@
  * - Consumption: No quantity threshold, just time filter
  */
 
+const { getAbsoluteRange } = require('./timeUtils');
+
 const MIN_TIME_BETWEEN_POINTS_MS = 2 * 60 * 1000;  // 2 minutes
 const M3_TO_GAL = 264.172;
 const GAL_TO_M3 = 0.00378541;
@@ -86,31 +88,23 @@ TankageEngine.prototype.calculateUsageForPeriod = async function(item, period) {
   const { range, aggregation } = period;
   
   this.app.debug(`TankageEngine: Calculating ${range} for ${path} (aggregation: ${aggregation || 'auto'})`);
-  
-  const rangeHours = this.parseTimeRange(range);
-  
-  let uniquePeriods, expectedPeriods, periodType;
-  if (rangeHours >= 24) {
-    const days = Math.ceil(rangeHours / 24);
-    periodType = 'days';
-    uniquePeriods = days;
-    expectedPeriods = Math.max(1, Math.floor(days * 0.7));
-  } else {
-    periodType = 'hours';
-    uniquePeriods = Math.ceil(rangeHours);
-    expectedPeriods = Math.max(1, Math.floor(rangeHours * 0.7));
-  }
-  
+
+  const absoluteRange = getAbsoluteRange(range);
+  const rangeHours = absoluteRange
+    ? (new Date(absoluteRange.end) - new Date(absoluteRange.start)) / 3600000
+    : this.parseTimeRange(range);
   const aggregationWindow = aggregation || this.getAutoAggregation(rangeHours);
-  const rangeParam = `-${range}`;
-  
+
   let dataPoints;
   try {
-    dataPoints = await this.influxClient.queryPath(
-      path,
-      rangeParam,
-      aggregationWindow
-    );
+    if (absoluteRange) {
+      const raw = await this.influxClient.queryPathCustomRange(
+        path, absoluteRange.start, absoluteRange.end, aggregationWindow
+      );
+      dataPoints = raw ? raw.map(p => ({ timestamp: new Date(p.timestamp), value: p.value })) : [];
+    } else {
+      dataPoints = await this.influxClient.queryPath(path, `-${range}`, aggregationWindow);
+    }
   } catch (err) {
     this.app.debug(`TankageEngine: InfluxDB query failed for ${path}: ${err.message}`);
     return {
@@ -370,7 +364,7 @@ TankageEngine.prototype.calculateTankageFromData = function(dataPoints, isLargeT
 
 TankageEngine.prototype.parseTimeRange = function(range) {
   const match = range.match(/^(\d+)([smhd])$/);
-  if (!match) return 1;
+  if (!match) return 24;
   
   const value = parseInt(match[1]);
   const unit = match[2];

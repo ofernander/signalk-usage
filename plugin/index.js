@@ -44,7 +44,7 @@ module.exports = function (app) {
       // Test connection
       plugin.influxClient.ping()
         .then(() => {
-          app.debug('InfluxDB connection successful');
+          app.debug('InfluxDB connected successfully');
           
           // Initialize usage coordinator
           plugin.usageCoordinator = new UsageCoordinator(
@@ -80,7 +80,7 @@ module.exports = function (app) {
           plugin.updateTimer = setInterval(() => {
             plugin.usageCoordinator.calculateAll()
               .catch(err => {
-                app.debug(`Calculation error: ${err.message}`);
+                app.debug(`Periodic calculation error: ${err.message}`);
               });
           }, updateInterval);
           

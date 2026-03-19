@@ -281,8 +281,15 @@ class UsageApp {
 
         // Fetch time-series for the selected period
         const now = new Date();
-        const end = now.toISOString();
-        const start = new Date(now - this.periodToMs(period)).toISOString();
+        let start, end;
+        const nr = this.resolveNamedRange(period, now);
+        if (nr) {
+            start = nr.start;
+            end = nr.end;
+        } else {
+            end = now.toISOString();
+            start = new Date(now - this.periodToMs(period)).toISOString();
+        }
         const aggregation = this.periodToAggregation(period);
 
         let rawData;
@@ -411,13 +418,89 @@ class UsageApp {
         });
     }
 
+    resolveNamedRange(period, now) {
+        if (period === 'today') {
+            const s = new Date(now); s.setHours(0,0,0,0);
+            return { start: s.toISOString(), end: now.toISOString() };
+        }
+        if (period === 'yesterday') {
+            const s = new Date(now); s.setDate(s.getDate()-1); s.setHours(0,0,0,0);
+            const e = new Date(now); e.setHours(0,0,0,0);
+            return { start: s.toISOString(), end: e.toISOString() };
+        }
+        if (period === 'this_week') {
+            const s = new Date(now); s.setDate(s.getDate()-s.getDay()); s.setHours(0,0,0,0);
+            return { start: s.toISOString(), end: now.toISOString() };
+        }
+        if (period === 'last_week') {
+            const s = new Date(now); s.setDate(s.getDate()-s.getDay()-7); s.setHours(0,0,0,0);
+            const e = new Date(s); e.setDate(e.getDate()+7);
+            return { start: s.toISOString(), end: e.toISOString() };
+        }
+        if (period === 'this_month') {
+            const s = new Date(now.getFullYear(), now.getMonth(), 1);
+            return { start: s.toISOString(), end: now.toISOString() };
+        }
+        if (period === 'last_month') {
+            const s = new Date(now.getFullYear(), now.getMonth()-1, 1);
+            const e = new Date(now.getFullYear(), now.getMonth(), 1);
+            return { start: s.toISOString(), end: e.toISOString() };
+        }
+        if (period === 'last_6_months') {
+            const s = new Date(now.getFullYear(), now.getMonth()-6, 1);
+            return { start: s.toISOString(), end: now.toISOString() };
+        }
+        if (period === 'this_year') {
+            const s = new Date(now.getFullYear(), 0, 1);
+            return { start: s.toISOString(), end: now.toISOString() };
+        }
+        if (period === 'last_year') {
+            const s = new Date(now.getFullYear()-1, 0, 1);
+            const e = new Date(now.getFullYear(), 0, 1);
+            return { start: s.toISOString(), end: e.toISOString() };
+        }
+        return null;
+    }
+
     periodToMs(period) {
+        if (period === 'today') {
+            const now = new Date();
+            const midnight = new Date(now);
+            midnight.setHours(0, 0, 0, 0);
+            return now - midnight;
+        }
+        if (period === 'yesterday')    return 86400000;
+        if (period === 'this_week') {
+            const now = new Date();
+            const s = new Date(now);
+            s.setDate(s.getDate() - s.getDay());
+            s.setHours(0, 0, 0, 0);
+            return now - s;
+        }
+        if (period === 'last_week')    return 86400000 * 7;
+        if (period === 'this_month') {
+            const now = new Date();
+            const s = new Date(now.getFullYear(), now.getMonth(), 1);
+            return now - s;
+        }
+        if (period === 'last_month')   return 86400000 * 30;
+        if (period === 'last_6_months') return 86400000 * 180;
+        if (period === 'this_year') {
+            const now = new Date();
+            const s = new Date(now.getFullYear(), 0, 1);
+            return now - s;
+        }
+        if (period === 'last_year')    return 86400000 * 365;
         const units = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
         const m = period.match(/^(\d+)([smhd])$/);
         return m ? parseInt(m[1]) * units[m[2]] : 3600000;
     }
 
     periodToAggregation(period) {
+        if (period === 'today' || period === 'yesterday') return '15m';
+        if (period === 'this_week' || period === 'last_week') return '1h';
+        if (period === 'this_month' || period === 'last_month') return '4h';
+        if (period === 'last_6_months' || period === 'this_year' || period === 'last_year') return '12h';
         const ms = this.periodToMs(period);
         if (ms <= 3600000)   return '1m';
         if (ms <= 21600000)  return '5m';

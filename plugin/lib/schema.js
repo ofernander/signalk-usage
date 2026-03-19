@@ -63,6 +63,7 @@ module.exports = {
             format: 'table',
             default: [
               { range: '1h', aggregation: '30s' },
+              { range: 'today', aggregation: '15m' },
               { range: '24h', aggregation: '5m' },
               { range: '7d', aggregation: '10m' },
               { range: '30d', aggregation: '15m' }
@@ -75,7 +76,7 @@ module.exports = {
                 range: {
                   type: 'string',
                   title: 'Range',
-                  description: 'Time range (e.g., 1h, 24h, 7d, 30d)'
+                  description: 'Time range (e.g., 1h, 24h, 7d, 30d, today, yesterday, this_week, last_week, this_month, last_month, last_6_months, this_year, last_year)'
                 },
                 aggregation: {
                   type: 'string',
@@ -120,6 +121,7 @@ module.exports = {
             format: 'table',
             default: [
               { range: '1h', aggregation: '30s' },
+              { range: 'today', aggregation: '15m' },
               { range: '24h', aggregation: '3m' },
               { range: '7d', aggregation: '10m' },
               { range: '30d', aggregation: '15m' }
@@ -132,7 +134,7 @@ module.exports = {
                 range: {
                   type: 'string',
                   title: 'Range',
-                  description: 'Time range (e.g., 1h, 24h, 7d, 30d)'
+                  description: 'Time range (e.g., 1h, 24h, 7d, 30d, today, yesterday, this_week, last_week, this_month, last_month, last_6_months, this_year, last_year)'
                 },
                 aggregation: {
                   type: 'string',

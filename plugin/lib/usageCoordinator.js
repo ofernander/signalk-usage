@@ -21,7 +21,7 @@ UsageCoordinator.prototype.calculateAll = async function() {
   }
   
   this.isCalculating = true;
-  this.app.debug('UsageCoordinator: Starting calculation for all items');
+  this.app.debug('UsageCoordinator: Starting calculation cycle');
   
   try {
     // Calculate power and tankage in parallel
@@ -31,7 +31,9 @@ UsageCoordinator.prototype.calculateAll = async function() {
     ]);
     
     this.isReady = true;
-    this.app.debug('UsageCoordinator: Calculation complete');
+    const powerCount = Object.keys(this.powerEngine.getUsageData()).length;
+    const tankCount = Object.keys(this.tankageEngine.getUsageData()).length;
+    this.app.debug(`Calculation complete: ${powerCount} power items, ${tankCount} tank items`);
   } finally {
     this.isCalculating = false;
   }

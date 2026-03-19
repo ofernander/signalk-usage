@@ -1,3 +1,5 @@
+const { getAbsoluteRange } = require('./timeUtils');
+
 function PowerEngine(app, influxClient, options) {
   this.app = app;
   this.influxClient = influxClient;
@@ -78,7 +80,7 @@ PowerEngine.prototype.parseAggregationWindow = function(aggregation) {
 PowerEngine.prototype.parseTimeRange = function(range) {
   // Parse range string like "1h", "7d", "365d" to hours
   const match = range.match(/^(\d+)([smhd])$/);
-  if (!match) return 1; // Default to 1 hour if can't parse
+  if (!match) return 24; // Default to 24 hours if can't parse
   
   const value = parseInt(match[1]);
   const unit = match[2];
@@ -95,17 +97,31 @@ PowerEngine.prototype.parseTimeRange = function(range) {
 PowerEngine.prototype.calculateUsageForPeriod = async function(item, period) {
   const { path, directionality } = item;
   const { range, aggregation } = period;
-  const rangeParam = `-${range}`;
-  
+
   // Determine directionality (explicit or auto-detect)
   let effectiveDirectionality = directionality;
   if (!effectiveDirectionality) {
     effectiveDirectionality = this.autoDetectDirectionalityType(path);
   }
-  
+
   this.app.debug(`PowerEngine: Calculating ${range} for ${path} (aggregation: ${aggregation || 'auto'}, directionality: ${effectiveDirectionality})`);
-  
-  const { first, last } = await this.influxClient.getFirstAndLast(path, rangeParam);
+
+  const absoluteRange = getAbsoluteRange(range);
+
+  let first, last;
+  if (absoluteRange) {
+    const pts = await this.influxClient.queryPathCustomRange(
+      path, absoluteRange.start, absoluteRange.end, aggregation || '1m'
+    );
+    if (pts && pts.length >= 2) {
+      first = { timestamp: new Date(pts[0].timestamp), value: pts[0].value };
+      last  = { timestamp: new Date(pts[pts.length - 1].timestamp), value: pts[pts.length - 1].value };
+    }
+  } else {
+    const result = await this.influxClient.getFirstAndLast(path, `-${range}`);
+    first = result.first;
+    last  = result.last;
+  }
   
   if (!first || !last) {
     return {
@@ -129,7 +145,15 @@ PowerEngine.prototype.calculateUsageForPeriod = async function(item, period) {
   // Energy calculation using integration with aggregated data
   try {
     this.app.debug(`PowerEngine: Fetching aggregated data for ${path}`);
-    const dataPoints = await this.influxClient.queryPath(path, rangeParam, aggregation);
+    let dataPoints;
+    if (absoluteRange) {
+      const raw = await this.influxClient.queryPathCustomRange(
+        path, absoluteRange.start, absoluteRange.end, aggregation
+      );
+      dataPoints = raw ? raw.map(p => ({ timestamp: new Date(p.timestamp), value: p.value })) : [];
+    } else {
+      dataPoints = await this.influxClient.queryPath(path, `-${range}`, aggregation);
+    }
     
     if (!dataPoints || dataPoints.length < 2) {
       this.app.debug(`PowerEngine: Insufficient data points for ${path}: ${dataPoints ? dataPoints.length : 0}`);
@@ -140,7 +164,9 @@ PowerEngine.prototype.calculateUsageForPeriod = async function(item, period) {
     }
 
     // Check coverage based on unique days (or hours for sub-day periods)
-    const rangeHours = this.parseTimeRange(range);
+    const rangeHours = absoluteRange
+      ? (new Date(absoluteRange.end) - new Date(absoluteRange.start)) / 3600000
+      : this.parseTimeRange(range);
     
     let uniquePeriods, expectedPeriods, periodType;
     

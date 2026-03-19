@@ -54,6 +54,7 @@ module.exports = function(router, app, plugin) {
         const { path, start, end, aggregation } = req.body;
 
         if (!path || !start || !end) {
+          app.debug(`API query rejected: missing parameters (path=${path}, start=${start}, end=${end})`);
           return res.status(400).json({ 
             error: 'Missing required parameters: path, start, end' 
           });

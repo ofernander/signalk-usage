@@ -8,7 +8,7 @@ function Publisher(app, usageCoordinator, options) {
 Publisher.prototype.start = function() {
   const interval = (this.options.reporting?.updateInterval || 20) * 1000;
 
-  this.app.debug(`Starting publisher (interval: ${interval}ms)`);
+  this.app.debug(`Publisher started (interval: ${interval / 1000}s)`);
 
   // Publish immediately (will skip if not ready)
   this.publish();

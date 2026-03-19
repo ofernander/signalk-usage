@@ -172,11 +172,18 @@ const UI = {
         return 'Bidirectional';
     },
 
-    // Sort period keys shortest -> longest
+    // Sort period keys: lettered ranges first (shortest->longest), named ranges after in logical order
     sortPeriods(periods) {
         const unitMs = { s: 1, m: 60, h: 3600, d: 86400 };
+        const namedOrder = {
+            'today': 1, 'yesterday': 2,
+            'this_week': 3, 'last_week': 4,
+            'this_month': 5, 'last_month': 6,
+            'last_6_months': 7, 'this_year': 8, 'last_year': 9
+        };
         return Object.entries(periods).sort(([a], [b]) => {
             const parse = s => {
+                if (namedOrder[s] !== undefined) return Infinity + namedOrder[s];
                 const m = s.match(/^(\d+)([smhd])$/);
                 return m ? parseInt(m[1]) * unitMs[m[2]] : 0;
             };
@@ -200,10 +207,20 @@ const UI = {
 
         let periodsHtml = sortedPeriods.map(([range, data], idx) => {
             const isActive = idx === 0;
+            const displayLabel = range === 'today' ? 'TODAY'
+                               : range === 'yesterday' ? 'YESTERDAY'
+                               : range === 'this_week' ? 'THIS WEEK'
+                               : range === 'last_week' ? 'LAST WEEK'
+                               : range === 'this_month' ? 'THIS MONTH'
+                               : range === 'last_month' ? 'LAST MONTH'
+                               : range === 'last_6_months' ? 'LAST 6 MONTHS'
+                               : range === 'this_year' ? 'THIS YEAR'
+                               : range === 'last_year' ? 'LAST YEAR'
+                               : range.toUpperCase();
             if (data.insufficientData) {
                 return `
                     <div class="period-block${isActive ? ' active' : ''}" data-period="${range}" data-path="${this.escapeHtml(path)}" data-power="${isPower}">
-                        <div class="period-label">${range}</div>
+                        <div class="period-label">${displayLabel}</div>
                         <div class="insufficient-data">⚠️ ${data.reason || 'Insufficient data'}</div>
                     </div>
                 `;
@@ -213,7 +230,7 @@ const UI = {
                 : this.renderTankagePeriod(data, unitPref);
             return `
                 <div class="period-block${isActive ? ' active' : ''}" data-period="${range}" data-path="${this.escapeHtml(path)}" data-power="${isPower}">
-                    <div class="period-label">${range}</div>
+                    <div class="period-label">${displayLabel}</div>
                     ${statsHtml}
                 </div>
             `;
