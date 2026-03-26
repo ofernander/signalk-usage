@@ -20,15 +20,18 @@ Publisher.prototype.start = function() {
 };
 
 Publisher.prototype.round = function(value, decimalPlaces = 1) {
-  // Ensure we always have a valid number
+  // Ensure we always have a valid number - never publish a string
   const num = Number(value);
   if (!isFinite(num)) {
-    return 0; // Return 0 for null, undefined, NaN, Infinity
+    return 0;
   }
-  
-  // Round to specified decimal places (default 1)
   const multiplier = Math.pow(10, decimalPlaces);
   return Math.round(num * multiplier) / multiplier;
+};
+
+Publisher.prototype.safeNumber = function(value) {
+  const num = Number(value);
+  return isFinite(num) ? num : 0;
 };
 
 Publisher.prototype.publish = function() {
@@ -110,7 +113,7 @@ Publisher.prototype.publishTankageItems = function(items, deltas, meta) {
       // Publish totals with 3 decimal places for better precision when converting to L/gal
       deltas.push({
         path: `${basePath}.consumed.${period}`,
-        value: this.round(periodData.consumed || 0, 3)
+        value: Number(this.round(periodData.consumed || 0, 3))
       });
       meta.push({
         path: `${basePath}.consumed.${period}`,
@@ -119,7 +122,7 @@ Publisher.prototype.publishTankageItems = function(items, deltas, meta) {
       
       deltas.push({
         path: `${basePath}.added.${period}`,
-        value: this.round(periodData.added || 0, 3)
+        value: Number(this.round(periodData.added || 0, 3))
       });
       meta.push({
         path: `${basePath}.added.${period}`,
@@ -179,7 +182,7 @@ Publisher.prototype.publishPowerItems = function(items, deltas, meta) {
         // Only publish generated
         deltas.push({
           path: `${basePath}.${generatedLabel}.${period}`,
-          value: this.round(periodData.energy.generatedWh || 0, 1)
+          value: Number(this.round(periodData.energy.generatedWh || 0, 1))
         });
         meta.push({
           path: `${basePath}.${generatedLabel}.${period}`,
@@ -189,7 +192,7 @@ Publisher.prototype.publishPowerItems = function(items, deltas, meta) {
         // Only publish consumed
         deltas.push({
           path: `${basePath}.${consumedLabel}.${period}`,
-          value: this.round(periodData.energy.consumedWh || 0, 1)
+          value: Number(this.round(periodData.energy.consumedWh || 0, 1))
         });
         meta.push({
           path: `${basePath}.${consumedLabel}.${period}`,
@@ -199,7 +202,7 @@ Publisher.prototype.publishPowerItems = function(items, deltas, meta) {
         // Bidirectional or auto-detected - publish both
         deltas.push({
           path: `${basePath}.${consumedLabel}.${period}`,
-          value: this.round(periodData.energy.consumedWh || 0, 1)
+          value: Number(this.round(periodData.energy.consumedWh || 0, 1))
         });
         meta.push({
           path: `${basePath}.${consumedLabel}.${period}`,
@@ -208,7 +211,7 @@ Publisher.prototype.publishPowerItems = function(items, deltas, meta) {
         
         deltas.push({
           path: `${basePath}.${generatedLabel}.${period}`,
-          value: this.round(periodData.energy.generatedWh || 0, 1)
+          value: Number(this.round(periodData.energy.generatedWh || 0, 1))
         });
         meta.push({
           path: `${basePath}.${generatedLabel}.${period}`,
