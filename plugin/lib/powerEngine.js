@@ -168,39 +168,6 @@ PowerEngine.prototype.calculateUsageForPeriod = async function(item, period) {
       ? (new Date(absoluteRange.end) - new Date(absoluteRange.start)) / 3600000
       : this.parseTimeRange(range);
     
-    let uniquePeriods, expectedPeriods, periodType;
-    
-    if (rangeHours >= 24) {
-      // For periods >= 1 day, check daily coverage
-      const uniqueDays = new Set(dataPoints.map(p => {
-        const date = new Date(p.timestamp);
-        return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
-      }));
-      uniquePeriods = uniqueDays.size;
-      expectedPeriods = Math.ceil(rangeHours / 24);
-      periodType = 'days';
-    } else {
-      // For periods < 1 day, check hourly coverage
-      const uniqueHours = new Set(dataPoints.map(p => {
-        const date = new Date(p.timestamp);
-        return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}-${String(date.getUTCHours()).padStart(2, '0')}`;
-      }));
-      uniquePeriods = uniqueHours.size;
-      expectedPeriods = Math.ceil(rangeHours);
-      periodType = 'hours';
-    }
-    
-    this.app.debug(`PowerEngine: Coverage for ${path} (${range}): ${uniquePeriods}/${expectedPeriods} ${periodType}`);
-
-    // Check if we have data for every day (or hour)
-    if (uniquePeriods < expectedPeriods) {
-      this.app.debug(`PowerEngine: Insufficient coverage for ${path} (${range}) - missing ${expectedPeriods - uniquePeriods} ${periodType}`);
-      return {
-        insufficientData: true,
-        reason: `Insufficient coverage (${uniquePeriods}/${expectedPeriods} ${periodType})`
-      };
-    }
-
     this.app.debug(`PowerEngine: Integrating ${dataPoints.length} aggregated data points for ${path} (${range})`);
 
     // Parse aggregation window to detect gaps
