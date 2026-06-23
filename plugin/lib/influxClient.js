@@ -1,5 +1,4 @@
 const { InfluxDB } = require('@influxdata/influxdb-client');
-const { PingAPI } = require('@influxdata/influxdb-client-apis');
 
 function InfluxClient(config, app) {
   this.config = config;
@@ -13,6 +12,7 @@ function InfluxClient(config, app) {
 
 InfluxClient.prototype.ping = async function() {
   try {
+    const { PingAPI } = require('@influxdata/influxdb-client-apis');
     const pingAPI = new PingAPI(this.client);
     await pingAPI.getPing();
     return true;

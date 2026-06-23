@@ -27,13 +27,7 @@ module.exports = function (app) {
         return;
       }
 
-      const tankageItems = options.tankage || [];
-      const powerItems = options.power || [];
-      
-      if (tankageItems.length === 0 && powerItems.length === 0) {
-        app.setPluginError('At least one tankage or power item must be configured');
-        return;
-      }
+      app.setPluginStatus('Connecting to InfluxDB...');
 
       // Initialize InfluxDB client (read-only)
       plugin.influxClient = new InfluxClient(
